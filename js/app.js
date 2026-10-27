@@ -1,5 +1,8 @@
 (() => {
-const D = window.DATA, M = window.MATH, A = window.Audio2, St = window.Store;
+const D = window.DATA, M = window.MATH, GEO = window.GEO, A = window.Audio2, St = window.Store;
+// subjects that use the practice engine (same problem format), and how each is labeled
+const PRACTICE = { math: M, geo: GEO };
+const SUBJ = { reading: ["📖", "Reading"], math: ["🔢", "Math"], geo: ["🌍", "Geography"] };
 const $ = s => document.querySelector(s);
 const app = $("#app");
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -14,7 +17,7 @@ const tileClass = t => isVowel(t) ? "v" : "c";
 const partClass = p => p.kind === "chunk" ? "k" : p.kind === "silent" ? "x" : tileClass(p.s);
 const CHEERS = ["p_great", "p_gotit", "p_awesome", "p_super", "p_yes", "p_wow", "p_nice"];
 const MATH_CHEERS = ["p_great", "p_gotit", "p_awesome", "p_yes", "p_wow", "p_nice", "p_correct", "p_smart"];
-const cheer = () => { const c = St.S.subject === "math" ? MATH_CHEERS : CHEERS; return c[Math.floor(Math.random() * c.length)]; };
+const cheer = () => { const c = St.S.subject !== "reading" ? MATH_CHEERS : CHEERS; return c[Math.floor(Math.random() * c.length)]; };
 
 // ---------- content helpers ----------
 const GRADE = id => D.GRADES.find(g => g.id === id) || D.GRADES[0];
@@ -82,7 +85,7 @@ function confetti(n = 70) {
 async function award(n, clips) {
   const nav = navId;
   St.touch();
-  const math = St.S.subject === "math";
+  const math = St.S.subject !== "reading";
   const r = St.addStars(n); refreshStars(); pop("+" + n + " ★");
   if (r.launch) {
     const rk = $("#rocket"); if (rk) rk.classList.add("launch"); confetti(110);
@@ -96,6 +99,7 @@ async function award(n, clips) {
 // Reading: a planet opens when enough of the one before is known. Math: after 40 first-try answers.
 const READ_UNLOCK = { prek: 12, k: 20, g1: 20, g2: 15, g3: 15, g4: 15 };
 const MATH_UNLOCK = 40;
+const UNLOCK = { math: MATH_UNLOCK, geo: 30 };   // first-try answers that open the next math / geography planet
 function readingKnown(id) {
   const l = D.READING[id];
   if (id === "prek") return D.PINK_SOUNDS.filter(s => soundBox(s) >= St.MASTERED).length;
@@ -105,7 +109,7 @@ function checkUnlocks() {
   D.GRADES.slice(0, -1).forEach((g, i) => {
     const next = D.GRADES[i + 1];
     if (St.isOpen("reading", g.id) && readingKnown(g.id) >= READ_UNLOCK[g.id] && St.unlock("reading", next.id)) { toast(`New reading planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
-    if (St.isOpen("math", g.id) && (St.S.mathRight[g.id] || 0) >= MATH_UNLOCK && St.unlock("math", next.id)) { toast(`New math planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
+    for (const sub of ["math", "geo"]) if (St.isOpen(sub, g.id) && St.rightCount(sub, g.id) >= UNLOCK[sub] && St.unlock(sub, next.id)) { toast(`New ${SUBJ[sub][1].toLowerCase()} planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
   });
 }
 const lit = (el, on) => el && el.classList.toggle("on", on);
@@ -149,12 +153,12 @@ const CHUNK_ACTS = {
 };
 // the lessons on a grade: [id, icon, name, description, tag]
 function lessons(sub, g) {
-  if (sub === "math") return M.GRADE_SKILLS[g].map(([id, desc, name]) => { const sk = M.SK[id]; return [id, sk.ico, name || sk.name, desc, sk.tag]; });
+  if (PRACTICE[sub]) return PRACTICE[sub].GRADE_SKILLS[g].map(([id, desc, name]) => { const sk = PRACTICE[sub].SK[id]; return [id, sk.ico, name || sk.name, desc, sk.tag]; });
   const l = D.READING[g];
   return l.acts.map(id => [id, ...((l.chunks && CHUNK_ACTS[id]) || ACTS[id])]);
 }
 function homeActs() {
-  const sub = St.S.subject, g = St.S.grade[sub], attr = sub === "math" ? "data-m" : "data-a";
+  const sub = St.S.subject, g = St.S.grade[sub], attr = PRACTICE[sub] ? `data-p="${sub}" data-m` : "data-a";
   return lessons(sub, g).map(([id, ico, name, desc, tag]) => { const locked = !St.lessonOpen(sub, g, id);
     return `<button class="act ${locked ? "locked" : ""}" ${attr}="${id}"><span class="ico">${locked ? "🔒" : ico}</span><b>${name}</b><small>${desc}</small><span class="tag">${tag}</span></button>`; }).join("");
 }
@@ -163,20 +167,19 @@ SCREENS.home = () => {
   const ring = `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="34" fill="none" stroke="#33478A" stroke-width="10"/>
     ${pct > 0 ? `<circle cx="42" cy="42" r="34" fill="none" stroke="#FFC83A" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(pct * 213.6).toFixed(1)} 213.6" transform="rotate(-90 42 42)"/>` : ""}
     <text x="42" y="48" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="20" fill="#fff">${d.stars}</text></svg>`;
-  const blurb = sub === "math" ? M.GRADE_SKILLS[cur.id].map(([, s]) => s).slice(0, 3).join(" · ") : level().blurb;
+  const blurb = PRACTICE[sub] ? PRACTICE[sub].GRADE_SKILLS[cur.id].map(([, s]) => s).slice(0, 3).join(" · ") : level().blurb;
   shell("Sound Rocket", `
     <button class="kidchip" id="kids"><span>${esc(St.kid().ava)}</span><b>${esc(St.kid().name)}</b><small>${St.kids().length > 1 ? "Switch player" : "Add a player"}</small></button>
     <div class="mission">${ring}<div><h2>${d.stars >= St.GOAL ? "Mission complete today!" : `Today's mission: ${St.GOAL} stars`}</h2>
       <p>${d.stars >= St.GOAL ? "Great work. Keep going for bonus stars!" : `${St.GOAL - d.stars} stars to go`} · ${streak} day streak 🔥</p></div></div>
     <div class="subjects" role="tablist" aria-label="Subject">
-      <button role="tab" data-s="reading" aria-selected="${sub === "reading"}">📖 Reading</button>
-      <button role="tab" data-s="math" aria-selected="${sub === "math"}">🔢 Math</button></div>
+      ${St.SUBJECTS.map(x => `<button role="tab" data-s="${x}" aria-selected="${sub === x}">${SUBJ[x][0]} <span>${SUBJ[x][1]}</span></button>`).join("")}</div>
     <div class="planets" role="group" aria-label="Choose a grade">${D.GRADES.map(g => {
       const locked = !St.anyLesson(sub, g.id);
       return `<button class="planet ${locked ? "locked" : ""}" data-l="${g.id}" aria-pressed="${g.id === cur.id}" aria-label="${g.label}, ${g.planet}${locked ? ", locked" : ""}">
         <span class="orb" style="background:${g.orb}"></span><b>${locked ? "🔒 " : ""}${g.label}</b><small>${g.planet}</small></button>`;
     }).join("")}</div>
-    <p class="where"><b>${cur.planet} · ${cur.label === "K" ? "Kindergarten" : cur.label === "Pre-K" ? "Pre-K" : cur.label + " grade"} ${sub}</b>${blurb ? ": " + esc(blurb) : ""}</p>
+    <p class="where"><b>${cur.planet} · ${cur.label === "K" ? "Kindergarten" : cur.label === "Pre-K" ? "Pre-K" : cur.label + " grade"} ${SUBJ[sub][1].toLowerCase()}</b>${blurb ? ": " + esc(blurb) : ""}</p>
     <div class="acts">${homeActs()}</div>
     <button class="grownup" id="prog">📈 Progress and grown-up corner</button>`, { home: true });
   app.querySelectorAll(".subjects button").forEach(b => b.onclick = () => { St.setSubject(b.dataset.s); SCREENS.home(); });
@@ -186,7 +189,7 @@ SCREENS.home = () => {
   });
   const lockedMsg = () => toast("This lesson is locked. A grown-up can unlock it in the Progress page.", 3200);
   app.querySelectorAll(".act[data-a]").forEach(b => b.onclick = () => b.classList.contains("locked") ? lockedMsg() : go(b.dataset.a));
-  app.querySelectorAll(".act[data-m]").forEach(b => b.onclick = () => b.classList.contains("locked") ? lockedMsg() : go("math", b.dataset.m));
+  app.querySelectorAll(".act[data-m]").forEach(b => b.onclick = () => b.classList.contains("locked") ? lockedMsg() : go(b.dataset.p, b.dataset.m));
   $("#prog").onclick = () => go("progress");
   $("#kids").onclick = () => go(St.kids().length > 1 ? "kids" : "newkid");
 };
@@ -204,7 +207,7 @@ SCREENS.kids = () => {
   $("#add").onclick = () => go("newkid");
 };
 SCREENS.newkid = () => {
-  const first = !St.kid(), pick = { ava: AVAS.find(a => !St.kids().some(k => k.ava === a)) || AVAS[0], reading: "prek", math: "prek" };
+  const first = !St.kid(), pick = { ava: AVAS.find(a => !St.kids().some(k => k.ava === a)) || AVAS[0], reading: "prek", math: "prek", geo: "prek" };
   const gradeRow = sub => `<div class="levels" data-sub="${sub}">${D.GRADES.map(g => `<button data-g="${g.id}" aria-pressed="${g.id === pick[sub]}">${g.label}</button>`).join("")}</div><p class="hint" id="hint-${sub}"></p>`;
   shell(first ? "Welcome!" : "Add a child", `
     <div class="panel setup">
@@ -215,12 +218,13 @@ SCREENS.newkid = () => {
       <div class="avas">${AVAS.map(a => `<button data-a="${a}" aria-pressed="${a === pick.ava}">${a}</button>`).join("")}</div>
       <p><b>📖 Start reading at</b></p>${gradeRow("reading")}
       <p><b>🔢 Start math at</b></p>${gradeRow("math")}
+      <p><b>🌍 Start geography at</b></p>${gradeRow("geo")}
       <p>Grades before the starting one stay open for review. You can change this any time in the Progress page.</p>
       <button class="btn yes big" id="go">Let's go! 🚀</button>
       ${first ? `<label class="btn" id="restore">Restore a backup<input type="file" accept=".json,application/json" hidden></label>` : ""}
     </div>`, { home: first });
-  const hint = sub => { const g = GRADE(pick[sub]); $("#hint-" + sub).textContent = `${g.planet} · ${gradeName(g)}: ${sub === "reading" ? D.READING[g.id].blurb : M.GRADE_SKILLS[g.id].map(([, d]) => d).slice(0, 3).join(", ")}`; };
-  hint("reading"); hint("math");
+  const hint = sub => { const g = GRADE(pick[sub]); $("#hint-" + sub).textContent = `${g.planet} · ${gradeName(g)}: ${sub === "reading" ? D.READING[g.id].blurb : PRACTICE[sub].GRADE_SKILLS[g.id].map(([, d]) => d).slice(0, 3).join(", ")}`; };
+  St.SUBJECTS.forEach(hint);
   app.querySelectorAll(".levels button").forEach(b => b.onclick = () => {
     const sub = b.parentElement.dataset.sub; pick[sub] = b.dataset.g;
     b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); hint(sub);
@@ -627,39 +631,41 @@ SCREENS.story = (id) => {
 };
 
 // ---------- MATH ----------
-const mathGrade = () => St.S.grade.math;
-const skillEntry = id => M.GRADE_SKILLS[mathGrade()].find(e => e[0] === id);
-SCREENS.math = (id) => {
-  const g = mathGrade(), sk = M.SK[id], entry = skillEntry(id);
+// The practice screen for math and geography: multiple choice or a number pad, two tries, then the answer.
+SCREENS.math = id => practice("math", id);
+SCREENS.geo = id => practice("geo", id);
+function practice(sub, id) {
+  const P = PRACTICE[sub], g = St.S.grade[sub], sk = P.SK[id], entry = P.GRADE_SKILLS[g].find(e => e[0] === id);
   if (!sk || !entry) return go("home");
-  St.setSubject("math");
-  if (id === "numcards") return numberCards(g);
-  if (id === "tracenum") return traceNumber(g);
+  St.setSubject(sub);
+  if (sub === "math" && id === "numcards") return numberCards(g);
+  if (sub === "math" && id === "tracenum") return traceNumber(g);
   const keys = sk.keys ? sk.keys(g) : null;
-  const key = keys ? St.pick(keys, { maxNew: 4 }) : `m:${id}:${g}`;
+  const key = keys ? St.pick(keys, { maxNew: 4 }) : `${sub === "math" ? "m" : "g"}:${id}:${g}`;
   const p = sk.gen(g, keys ? key : null);
   shell(entry[2] || sk.name, `<section class="card math">
     <p class="prompt big">${p.q}</p>
     ${p.vis ? `<div class="mvis">${p.vis}</div>` : ""}
-    ${p.choices ? `<div class="mchoices ${p.wide ? "wide" : ""}">${p.choices.map((c, i) => `<button class="mchoice" data-i="${i}">${c.html}</button>`).join("")}</div>`
+    ${p.choices ? `<div class="mchoices ${p.wide ? "wide" : ""} ${p.maps ? "maps" : ""}">${p.choices.map((c, i) => `<button class="mchoice" data-i="${i}">${c.html}</button>`).join("")}</div>`
       : `<div class="pad"><output class="padout" id="out" aria-live="polite"></output><div class="keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9, p.pad.dec ? "." : "", 0, "⌫"].map(k => k === "" ? "<span></span>" : `<button class="key" data-k="${k}">${k}</button>`).join("")}</div>
         <button class="btn yes big" id="check">Check ✓</button></div>`}
     <div class="row"><button class="btn" id="hear">🔊 Hear it</button><button class="btn" id="skip">Skip</button></div></section>`);
   const ask = () => A.play(p.say, 90);
-  ask(); $("#hear").onclick = ask; $("#skip").onclick = () => SCREENS.math(id);
+  const again = () => practice(sub, id);
+  ask(); $("#hear").onclick = ask; $("#skip").onclick = again;
   let miss = 0, busy = false;
   const right = async () => {
     busy = true; const first = miss === 0;
-    St.grade(key, first, "math"); if (first) St.mathRight(g);
-    await award(first ? 2 : 1, [...(p.after || []), cheer()].filter(Boolean)); await wait(250); SCREENS.math(id);
+    St.grade(key, first, sub); if (first) St.mathRight(g, sub);
+    await award(first ? 2 : 1, [...(p.after || []), cheer()].filter(Boolean)); await wait(250); again();
   };
   // after two misses, show the answer and move on: no stars lost, and it comes back sooner
   const reveal = async () => {
-    busy = true; St.grade(key, false, "math");
+    busy = true; St.grade(key, false, sub);
     const row = document.createElement("div"); row.className = "reveal";
     row.innerHTML = `<p>The answer is <b>${p.choices ? p.choices.find(c => c.v === p.ans).html : esc(p.ans)}</b></p><button class="btn yes big" id="nextq">Next →</button>`;
     app.querySelector(".card").appendChild(row);
-    $("#nextq").onclick = () => SCREENS.math(id);
+    $("#nextq").onclick = again;
     await A.play(["p_answeris", ...(p.after || M.N(+p.ans))], 90);
   };
   if (p.choices) {
@@ -767,12 +773,13 @@ SCREENS.progress = () => {
   const meter = (name, n, of, col) => `<div class="lvrow"><span>${name}</span><div class="meter"><i style="width:${Math.min(1, n / of) * 100}%;background:${col}"></i></div><span>${n}/${of}</span></div>`;
   const lvRows = D.GRADES.filter(g => g.id !== "prek").map(g => { const l = D.READING[g.id], ws = [...levelWords(l).map(x => x[0]), ...l.vocab.map(v => v[0])];
     return meter(`${g.label} · ${g.planet}`, ws.filter(wordKnown).length, ws.length, g.color); }).join("");
-  const mathRows = D.GRADES.filter(g => St.isOpen("math", g.id)).map(g => meter(`${g.label} · ${g.planet}`, S.mathRight[g.id] || 0, MATH_UNLOCK, g.color)).join("");
+  const rightRows = sub => D.GRADES.filter(g => St.isOpen(sub, g.id)).map(g => meter(`${g.label} · ${g.planet}`, St.rightCount(sub, g.id), UNLOCK[sub], g.color)).join("");
   const facts = Object.keys(S.items).filter(k => /^m:(add|sub|mul|div):/.test(k));
   const tricky = D.TRICKY.filter(w => St.mastered("tricky:" + w));
-  const weakOf = math => Object.entries(S.items).filter(([k, v]) => k.startsWith("m:") === math && v.seen >= 3 && v.right / v.seen < .6)
-    .sort((a, b) => a[1].right / a[1].seen - b[1].right / b[1].seen).slice(0, 10).map(([k]) => math ? M.label(k) : k.split(":")[1]);
-  const weak = weakOf(false), weakMath = weakOf(true);
+  const subOf = k => k.startsWith("m:") ? "math" : k.startsWith("g:") ? "geo" : "reading";
+  const weakOf = sub => Object.entries(S.items).filter(([k, v]) => subOf(k) === sub && v.seen >= 3 && v.right / v.seen < .6)
+    .sort((a, b) => a[1].right / a[1].seen - b[1].right / b[1].seen).slice(0, 10).map(([k]) => PRACTICE[sub] ? PRACTICE[sub].label(k) : k.split(":")[1]);
+  const weak = weakOf("reading"), weakMath = weakOf("math"), weakGeo = weakOf("geo");
   const storyList = D.STORIES.filter(s => S.stories[s.id]).map(s => `<span class="chip">📖 ${esc(s.title)} · ${S.stories[s.id].times}×</span>`).join("") || `<p>No stories finished yet.</p>`;
   const gradeRow = sub => D.GRADES.map(g => `<button class="btn hold ${g.id === S.grade[sub] ? "yes" : ""}" data-hold="${sub}:${g.id}">${g.label}</button>`).join("");
   shell("Progress", `
@@ -783,7 +790,7 @@ SCREENS.progress = () => {
         <div class="stat"><b>${d.tries ? Math.round(d.right / d.tries * 100) + "%" : "–"}</b><small>right first time</small></div>
         <div class="stat"><b>${St.streak()}</b><small>day streak</small></div>
       </div>
-      <p>Today: ${d.sub.reading} reading stars and ${d.sub.math} math stars. This week: ${weekStars} stars in ${weekMin} ${weekMin === 1 ? "minute" : "minutes"}. Goal is ${St.GOAL} stars a day (green bars).</p>
+      <p>Today: ${d.sub.reading} reading, ${d.sub.math} math and ${d.sub.geo || 0} geography stars. This week: ${weekStars} stars in ${weekMin} ${weekMin === 1 ? "minute" : "minutes"}. Goal is ${St.GOAL} stars a day (green bars).</p>
       ${chart}</div>
     <div class="panel"><h3>📖 Letter sounds</h3>
       <div class="soundgrid">${allSounds.map(s => `<div class="sg ${cls(s)}">${D.SOUNDS[s][0]}</div>`).join("")}</div>
@@ -791,22 +798,26 @@ SCREENS.progress = () => {
     <div class="panel"><h3>📖 Words read</h3>${lvRows}
       <p>Tricky words known: ${tricky.length}/${D.TRICKY.length}${tricky.length ? " · " + tricky.map(esc).join(", ") : ""}</p></div>
     <div class="panel"><h3>📖 Stories read</h3><div class="chips">${storyList}</div></div>
-    <div class="panel"><h3>🔢 Math</h3><p>Answers right on the first try, per grade. ${MATH_UNLOCK} opens the next planet.</p>${mathRows}
+    <div class="panel"><h3>🔢 Math</h3><p>Answers right on the first try, per grade. ${MATH_UNLOCK} opens the next planet.</p>${rightRows("math")}
       <p>Math facts mastered: ${facts.filter(k => St.mastered(k)).length} of ${facts.length} practiced.</p></div>
-    ${weak.length || weakMath.length ? `<div class="panel"><h3>Needs more practice</h3><p>These come up more often until they stick.</p>
+    <div class="panel"><h3>🌍 Geography</h3><p>Answers right on the first try, per grade. ${UNLOCK.geo} opens the next planet.</p>${rightRows("geo")}
+      <p>Places and facts mastered: ${Object.keys(S.items).filter(k => k.startsWith("g:") && St.mastered(k)).length}.</p></div>
+    ${weak.length || weakMath.length || weakGeo.length ? `<div class="panel"><h3>Needs more practice</h3><p>These come up more often until they stick.</p>
       ${weak.length ? `<div class="chips">${weak.map(w => `<span class="chip">📖 ${esc(w)}</span>`).join("")}</div>` : ""}
-      ${weakMath.length ? `<div class="chips">${weakMath.map(w => `<span class="chip">🔢 ${esc(w)}</span>`).join("")}</div>` : ""}</div>` : ""}
+      ${weakMath.length ? `<div class="chips">${weakMath.map(w => `<span class="chip">🔢 ${esc(w)}</span>`).join("")}</div>` : ""}
+      ${weakGeo.length ? `<div class="chips">${weakGeo.map(w => `<span class="chip">🌍 ${esc(w)}</span>`).join("")}</div>` : ""}</div>` : ""}
     <div class="panel"><h3>Grown-up corner</h3>
       <ul class="tips">
         <li><b>Short and often:</b> 10 minutes a day beats an hour on Saturday. The daily goal is ${St.GOAL} stars, from reading and math together.</li>
-        <li><b>Planets are grades:</b> Moon is Pre-K, Mars K, Jupiter 1st, Saturn 2nd, Uranus 3rd, Neptune 4th and Pluto 5th grade, for both reading and math.</li>
+        <li><b>Planets are grades:</b> Moon is Pre-K, Mars K, Jupiter 1st, Saturn 2nd, Uranus 3rd, Neptune 4th and Pluto 5th grade, for reading, math and geography.</li>
         <li><b>Reading:</b> letter sounds (Pre-K), 3-letter words (K), blends and sh ch th (1st), long vowels and bossy r (2nd), then syllables, prefixes, suffixes and roots with word meanings and longer stories (3rd to 5th).</li>
         <li><b>Math:</b> counting, shapes and patterns (Pre-K), adding within 10 (K), facts to 20 and tens and ones (1st), 2-digit numbers, money and time (2nd), times tables and fractions (3rd), multi-digit work and decimals (4th), fraction and decimal operations (5th).</li>
+        <li><b>Geography:</b> land and water, places in town and weather (Pre-K and K), continents, oceans, compass and map symbols (1st), landforms and where animals live (2nd), US states, flags and countries (3rd), state capitals and US regions (4th), world capitals, latitude and climate zones (5th).</li>
         <li><b>Sounds, not letter names:</b> say "mmm," not "em." Stop sounds are short: "b," not "buh."</li>
         <li><b>Three steps (Montessori):</b> Sound Cards and Number Cards teach "This is…", then "Show me…", then "What is this?"</li>
         <li><b>Colours:</b> vowels are blue and consonants red, like the Montessori movable alphabet. Silent letters are grey.</li>
         <li><b>Mistakes are fine:</b> wrong taps play their own sound so the difference can be heard. After two misses in math the answer is shown. Misses never take stars away.</li>
-        <li><b>Unlocking:</b> a reading planet opens when enough words on the one before are known; a math planet opens after ${MATH_UNLOCK} first-try answers. Starting higher? Unlock a grade below.</li>
+        <li><b>Unlocking:</b> a reading planet opens when enough words on the one before are known; a math planet opens after ${MATH_UNLOCK} first-try answers, a geography planet after ${UNLOCK.geo}. Starting higher? Unlock a grade below.</li>
         <li>Each child's progress is saved on this device; "Back up progress" moves it to another one. On an iPhone or iPad, tap Share → Add to Home Screen to open it like an app.</li>
       </ul>
     </div>
@@ -814,7 +825,8 @@ SCREENS.progress = () => {
       <p>Hold a button for 2 seconds to use it (so little fingers can't change things by accident).</p>
       <p><b>📖 Reading grade</b>: now on ${GRADE(S.grade.reading).label}. Hold a grade to jump there; grades before it open too.</p><div class="row">${gradeRow("reading")}</div>
       <p><b>🔢 Math grade</b>: now on ${GRADE(S.grade.math).label}.</p><div class="row">${gradeRow("math")}</div>
-      <div class="row"><button class="btn hold" data-hold="all:reading">Open every reading planet</button><button class="btn hold" data-hold="all:math">Open every math planet</button></div>
+      <p><b>🌍 Geography grade</b>: now on ${GRADE(S.grade.geo).label}.</p><div class="row">${gradeRow("geo")}</div>
+      <div class="row">${St.SUBJECTS.map(x => `<button class="btn hold" data-hold="all:${x}">Open every ${SUBJ[x][1].toLowerCase()} planet</button>`).join("")}</div>
       <div class="row"><button class="btn" id="rename">Rename</button><button class="btn" id="backup">Back up progress</button>
         <label class="btn">Restore a backup<input type="file" id="restorefile" accept=".json,application/json" hidden></label></div>
       <div class="row"><button class="btn try hold" data-hold="reset">Start ${esc(St.kid().name)} over</button><button class="btn try hold" data-hold="remove">Remove ${esc(St.kid().name)}</button></div></div>
@@ -826,7 +838,7 @@ SCREENS.progress = () => {
       <p id="sndinfo"></p></div>
     <div class="panel" id="lessonpick"><h3>Unlock one lesson</h3>
       <p>Open a single lesson on any planet without opening the whole grade. Pick a subject and grade, then hold a lesson for 2 seconds.</p>
-      <div class="levels">${["reading", "math"].map(x => `<button data-ps="${x}" aria-pressed="${x === lp.sub}">${x === "reading" ? "📖 Reading" : "🔢 Math"}</button>`).join("")}</div>
+      <div class="levels">${St.SUBJECTS.map(x => `<button data-ps="${x}" aria-pressed="${x === lp.sub}">${SUBJ[x].join(" ")}</button>`).join("")}</div>
       <div class="levels">${D.GRADES.map(g => `<button data-pg="${g.id}" aria-pressed="${g.id === lp.g}">${g.label}</button>`).join("")}</div>
       ${St.isOpen(lp.sub, lp.g) ? `<p>Every lesson on ${GRADE(lp.g).planet} (${GRADE(lp.g).label}) is already open.</p>` : `<div class="lessonlist">${lessons(lp.sub, lp.g).map(([id, ico, name]) => {
         const on = St.lessonOpen(lp.sub, lp.g, id);

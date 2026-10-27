@@ -2,7 +2,7 @@
 // pages, scripts and styles are served from cache and refreshed in the background.
 // Range requests (iPhone/iPad <audio> asks for parts of a file) go straight to the network:
 // a cached whole file can't answer them, and partial responses can't be cached.
-const VERSION = "sound-rocket-v7";
+const VERSION = "sound-rocket-v8";
 self.addEventListener("install", e => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(
   caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())));

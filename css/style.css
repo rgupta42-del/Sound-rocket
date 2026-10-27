@@ -61,9 +61,10 @@ label.btn{display:inline-flex;align-items:center;justify-content:center}
 .ring{width:84px;height:84px}
 .mission h2{font-family:var(--display);margin:0;font-size:1.25rem;line-height:1.1}
 .mission p{margin:2px 0 0;color:#B9C6EE;font-size:.95rem}
-.subjects{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--space2);border-radius:20px;padding:5px}
+.subjects{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:var(--space2);border-radius:20px;padding:5px}
 .subjects button{border:none;border-radius:16px;padding:10px;background:transparent;font-family:var(--display);font-weight:800;font-size:1.15rem;cursor:pointer;color:#C5D1F5}
 .subjects button[aria-selected="true"]{background:var(--sun);color:#2a1d00}
+@media (max-width:420px){.subjects button{font-size:1rem;padding:10px 4px}}
 .planets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 @media (min-width:640px){.planets{grid-template-columns:repeat(7,1fr)}}
 .planet{border:3px solid transparent;border-radius:20px;background:var(--space2);padding:10px 6px 12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center}
@@ -210,6 +211,19 @@ label.btn{display:inline-flex;align-items:center;justify-content:center}
 .reveal p{margin:0;font-family:var(--display);font-size:1.3rem;color:var(--ink)}
 .reveal b{display:inline-flex;align-items:center;gap:.2em;font-size:1.6rem}
 .reveal .shape{width:60px;height:60px}
+
+/* geography */
+.map{width:100%;max-width:640px;height:auto;border-radius:14px;display:block}
+.mchoices.maps{grid-template-columns:1fr}
+.mchoices.maps .mchoice{padding:6px;min-height:0}
+.mchoices.maps .map{max-width:420px}
+.compass{width:min(220px,60vw);height:auto}
+.scene{display:grid;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(3,72px);gap:4px}
+.scene span{display:flex;align-items:center;justify-content:center;font-size:3rem;border-radius:12px;background:var(--card2)}
+.flag{font-size:6rem;line-height:1}
+.emo.big{font-size:3.4rem}
+.mchoice .cap{font-size:1.1rem;font-family:var(--display);margin-left:8px}
+.mchoice:has(.cap){font-size:1.4rem}
 
 /* progress */
 .panel{background:var(--card);color:var(--ink);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px}

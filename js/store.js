@@ -10,7 +10,8 @@ window.Store = (() => {
   const GAP = [30e3, 5 * 60e3, 20 * 3600e3, 2 * 864e5, 5 * 864e5, 12 * 864e5];
   const MASTERED = 3;
 
-  const fresh = () => ({ subject: "reading", grade: { reading: "prek", math: "prek" }, open: { reading: ["prek"], math: ["prek"] }, mathRight: {}, lessons: {} });
+  const SUBJECTS = ["reading", "math", "geo"];
+  const fresh = () => ({ subject: "reading", grade: { reading: "prek", math: "prek", geo: "prek" }, open: { reading: ["prek"], math: ["prek"], geo: ["prek"] }, mathRight: {}, geoRight: {}, lessons: {} });
   const blank = () => ({ stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, migrated: true, ...fresh() });
   const read = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
@@ -18,6 +19,9 @@ window.Store = (() => {
   function upgrade(s) {
     s = { ...blank(), migrated: false, ...s };
     if (!s.lessons) s.lessons = {};
+    // subjects added later start at Pre-K
+    for (const sub of SUBJECTS) { if (!s.grade[sub]) s.grade[sub] = "prek"; if (!s.open[sub]) s.open[sub] = ["prek"]; }
+    if (!s.geoRight) s.geoRight = {};
     // Before grade levels, reading had three planets: pink (3-letter words, now K), blue and green (now 1st grade)
     if (Array.isArray(s.unlocked)) {
       const map = { pink: "k", blue: "g1", green: "g1" };
@@ -49,7 +53,7 @@ window.Store = (() => {
     const id = "k" + Date.now().toString(36);
     P.kids.push({ id, name, ava }); write(PKEY, P);
     const s = blank();
-    for (const sub of ["reading", "math"]) { const g = start[sub] || "prek"; s.grade[sub] = g; s.open[sub] = GRADE_IDS.slice(0, GRADE_IDS.indexOf(g) + 1); }
+    for (const sub of SUBJECTS) { const g = start[sub] || "prek"; s.grade[sub] = g; s.open[sub] = GRADE_IDS.slice(0, GRADE_IDS.indexOf(g) + 1); }
     write(kidKey(id), s); switchKid(id); return id;
   }
   function editKid(id, f) { Object.assign(P.kids.find(k => k.id === id), f); write(PKEY, P); }
@@ -151,12 +155,14 @@ window.Store = (() => {
   function setLesson(subject, g, act, on) { if (on) S.lessons[`${subject}:${g}:${act}`] = true; else delete S.lessons[`${subject}:${g}:${act}`]; save(); }
   function setLevel(subject, g) { S.grade[subject] = g; save(); }
   function setSubject(s) { S.subject = s; save(); }
-  // first-try right answers in each math grade (opens the next math planet)
-  function mathRight(g) { S.mathRight[g] = (S.mathRight[g] || 0) + 1; save(); return S.mathRight[g]; }
+  // first-try right answers in each math or geography grade (opens the next planet)
+  const rightField = sub => sub === "geo" ? "geoRight" : "mathRight";
+  function mathRight(g, sub = "math") { const f = S[rightField(sub)]; f[g] = (f[g] || 0) + 1; save(); return f[g]; }
+  const rightCount = (sub, g) => S[rightField(sub)][g] || 0;
   // start this child over, keeping the grades they're on
   function reset() { const keep = { grade: S.grade, open: S.open, subject: S.subject }; S = { ...blank(), ...keep }; save(); }
 
   return { get S() { return S; }, GOAL, MASTERED, dayKey, today, touch, item, grade, box, mastered, pick, shuffle, sample, addStars, streak, storyRead,
-    isOpen, lessonOpen, anyLesson, setLesson, unlock, setLevel, setSubject, mathRight, reset, save,
+    SUBJECTS, rightCount, isOpen, lessonOpen, anyLesson, setLesson, unlock, setLevel, setSubject, mathRight, reset, save,
     kids, kid, switchKid, addKid, editKid, removeKid, exportKid, importKid };
 })();
