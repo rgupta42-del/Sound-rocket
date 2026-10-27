@@ -61,6 +61,7 @@ button:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
 .act{background:var(--card);color:var(--ink);border:none;border-radius:20px;padding:14px 14px 16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px;box-shadow:0 5px 0 #0b1330}
 .act:active{transform:translateY(3px);box-shadow:0 2px 0 #0b1330}
 .act .ico{font-size:2rem;line-height:1}
+.act.locked{opacity:.5;box-shadow:0 5px 0 #0b1330}
 .act b{font-family:var(--display);font-size:1.2rem;line-height:1.05}
 .act small{color:var(--muted);font-size:.85rem;line-height:1.25}
 .act .tag{font-family:var(--display);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -215,6 +216,10 @@ button:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
 .chip{background:var(--card2);border-radius:20px;padding:4px 10px;font-size:.9rem}
 .hold{position:relative;overflow:hidden}
 .hold::after{content:"";position:absolute;inset:auto 0 0 0;height:4px;background:var(--ink);transform:scaleX(var(--p,0));transform-origin:left}
+.lessonlist{display:flex;flex-direction:column;gap:8px}
+.lesson{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card2);border-radius:14px;padding:6px 6px 6px 12px;font-family:var(--display);font-weight:700}
+.lesson .btn{min-height:44px;padding:8px 14px}
+.lesson .btn:not(.yes){background:#fff;border:2px solid var(--line)}
 .tips{margin:0;padding-left:20px;display:grid;gap:6px;font-size:.92rem;color:var(--ink)}
 
 /* celebration */

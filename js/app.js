@@ -146,14 +146,16 @@ const CHUNK_ACTS = {
   blend: ["🧩", "Chunk It", "Read big words chunk by chunk", "With a grown-up"],
   build: ["🛠️", "Build a Word", "Put the word's chunks in order", "Syllable tiles"]
 };
+// the lessons on a grade: [id, icon, name, description, tag]
+function lessons(sub, g) {
+  if (sub === "math") return M.GRADE_SKILLS[g].map(([id, desc, name]) => { const sk = M.SK[id]; return [id, sk.ico, name || sk.name, desc, sk.tag]; });
+  const l = D.READING[g];
+  return l.acts.map(id => [id, ...((l.chunks && CHUNK_ACTS[id]) || ACTS[id])]);
+}
 function homeActs() {
-  if (St.S.subject === "math") {
-    return M.GRADE_SKILLS[St.S.grade.math].map(([id, sub, name]) => { const sk = M.SK[id];
-      return `<button class="act" data-m="${id}"><span class="ico">${sk.ico}</span><b>${name || sk.name}</b><small>${sub}</small><span class="tag">${sk.tag}</span></button>`; }).join("");
-  }
-  const l = level();
-  return l.acts.map(id => { const [ico, name, sub, tag] = (l.chunks && CHUNK_ACTS[id]) || ACTS[id];
-    return `<button class="act" data-a="${id}"><span class="ico">${ico}</span><b>${name}</b><small>${sub}</small><span class="tag">${tag}</span></button>`; }).join("");
+  const sub = St.S.subject, g = St.S.grade[sub], attr = sub === "math" ? "data-m" : "data-a";
+  return lessons(sub, g).map(([id, ico, name, desc, tag]) => { const locked = !St.lessonOpen(sub, g, id);
+    return `<button class="act ${locked ? "locked" : ""}" ${attr}="${id}"><span class="ico">${locked ? "🔒" : ico}</span><b>${name}</b><small>${desc}</small><span class="tag">${tag}</span></button>`; }).join("");
 }
 SCREENS.home = () => {
   const S = St.S, d = St.today(), pct = Math.min(1, d.stars / St.GOAL), streak = St.streak(), sub = S.subject, cur = GRADE(S.grade[sub]);
@@ -168,7 +170,7 @@ SCREENS.home = () => {
       <button role="tab" data-s="reading" aria-selected="${sub === "reading"}">📖 Reading</button>
       <button role="tab" data-s="math" aria-selected="${sub === "math"}">🔢 Math</button></div>
     <div class="planets" role="group" aria-label="Choose a grade">${D.GRADES.map(g => {
-      const locked = !St.isOpen(sub, g.id);
+      const locked = !St.anyLesson(sub, g.id);
       return `<button class="planet ${locked ? "locked" : ""}" data-l="${g.id}" aria-pressed="${g.id === cur.id}" aria-label="${g.label}, ${g.planet}${locked ? ", locked" : ""}">
         <span class="orb" style="background:${g.orb}"></span><b>${locked ? "🔒 " : ""}${g.label}</b><small>${g.planet}</small></button>`;
     }).join("")}</div>
@@ -177,11 +179,12 @@ SCREENS.home = () => {
     <button class="grownup" id="prog">📈 Progress and grown-up corner</button>`, { home: true });
   app.querySelectorAll(".subjects button").forEach(b => b.onclick = () => { St.setSubject(b.dataset.s); SCREENS.home(); });
   app.querySelectorAll(".planet").forEach(b => b.onclick = () => {
-    if (!St.isOpen(sub, b.dataset.l)) { toast("Earn more stars to fly here. A grown-up can unlock it in the Progress page.", 3200); return; }
+    if (!St.anyLesson(sub, b.dataset.l)) { toast("Earn more stars to fly here. A grown-up can unlock it in the Progress page.", 3200); return; }
     St.setLevel(sub, b.dataset.l); SCREENS.home();
   });
-  app.querySelectorAll(".act[data-a]").forEach(b => b.onclick = () => go(b.dataset.a));
-  app.querySelectorAll(".act[data-m]").forEach(b => b.onclick = () => go("math", b.dataset.m));
+  const lockedMsg = () => toast("This lesson is locked. A grown-up can unlock it in the Progress page.", 3200);
+  app.querySelectorAll(".act[data-a]").forEach(b => b.onclick = () => b.classList.contains("locked") ? lockedMsg() : go(b.dataset.a));
+  app.querySelectorAll(".act[data-m]").forEach(b => b.onclick = () => b.classList.contains("locked") ? lockedMsg() : go("math", b.dataset.m));
   $("#prog").onclick = () => go("progress");
 };
 
@@ -507,13 +510,13 @@ SCREENS.stories = () => {
     <div class="panel"><p>Read the story to yourself. Tap any word you get stuck on to hear it. Words underlined in yellow are tricky words.</p></div>
     <div class="shelf">${books.map(b => {
       const g = GRADE(b.level), read = S.stories[b.id];
-      const locked = !St.isOpen("reading", b.level);
+      const locked = !St.lessonOpen("reading", b.level, "stories");
       return `<button class="book" style="border-left-color:${g.color}" data-id="${b.id}"><span class="cv">${b.cover}</span><b>${esc(b.title)}</b>
         <small>${locked ? "🔒 " : ""}${g.label} · ${g.planet}${read ? ` · read ${read.times}×` : ""}</small></button>`;
     }).join("")}</div>`);
   app.querySelectorAll(".book").forEach(b => b.onclick = () => {
     const st = D.STORIES.find(s => s.id === b.dataset.id);
-    if (!St.isOpen("reading", st.level)) { toast("This story is on a planet you haven't reached yet.", 3000); return; }
+    if (!St.lessonOpen("reading", st.level, "stories")) { toast("This story is on a planet you haven't reached yet.", 3000); return; }
     go("story", st.id);
   });
 };
@@ -690,6 +693,7 @@ function traceNumber(g) {
 }
 
 // ---------- PROGRESS + GROWN-UP CORNER ----------
+const lp = { sub: "reading", g: "k" };   // the grown-up lesson picker's selection
 SCREENS.progress = () => {
   const S = St.S, d = St.today(), days = [];
   for (let i = 13; i >= 0; i--) { const x = new Date(); x.setDate(x.getDate() - i); const k = St.dayKey(x); days.push([k, S.days[k] || { stars: 0, secs: 0 }, x]); }
@@ -756,15 +760,30 @@ SCREENS.progress = () => {
         <li>Progress is saved on this device. On an iPad, tap Share → Add to Home Screen to open it like an app.</li>
       </ul>
       <p>Hold a button for 2 seconds to use it. Unlocking a grade opens the grades before it too.</p>
-      <p><b>Unlock reading</b></p><div class="row">${holdRow("reading")}</div>
-      <p><b>Unlock math</b></p><div class="row">${holdRow("math")}</div>
-      <div class="row"><button class="btn try hold" data-hold="reset">Reset progress</button></div></div>`);
+      <p><b>Unlock a whole grade: reading</b></p><div class="row">${holdRow("reading")}</div>
+      <p><b>Unlock a whole grade: math</b></p><div class="row">${holdRow("math")}</div>
+      <div class="row"><button class="btn try hold" data-hold="reset">Reset progress</button></div></div>
+    <div class="panel" id="lessonpick"><h3>Unlock one lesson</h3>
+      <p>Open a single lesson on any planet without opening the whole grade. Pick a subject and grade, then hold a lesson for 2 seconds.</p>
+      <div class="levels">${["reading", "math"].map(x => `<button data-ps="${x}" aria-pressed="${x === lp.sub}">${x === "reading" ? "📖 Reading" : "🔢 Math"}</button>`).join("")}</div>
+      <div class="levels">${D.GRADES.map(g => `<button data-pg="${g.id}" aria-pressed="${g.id === lp.g}">${g.label}</button>`).join("")}</div>
+      ${St.isOpen(lp.sub, lp.g) ? `<p>Every lesson on ${GRADE(lp.g).planet} (${GRADE(lp.g).label}) is already open.</p>` : `<div class="lessonlist">${lessons(lp.sub, lp.g).map(([id, ico, name]) => {
+        const on = St.lessonOpen(lp.sub, lp.g, id);
+        return `<div class="lesson"><span>${ico} ${esc(name)}</span><button class="btn hold ${on ? "" : "yes"}" data-hold="lesson:${lp.sub}:${lp.g}:${id}:${on ? 0 : 1}">${on ? "✓ Open · lock" : "Unlock"}</button></div>`; }).join("")}</div>`}
+    </div>`);
+  app.querySelectorAll("[data-ps]").forEach(b => b.onclick = () => { lp.sub = b.dataset.ps; SCREENS.progress(); $("#lessonpick").scrollIntoView(); });
+  app.querySelectorAll("[data-pg]").forEach(b => b.onclick = () => { lp.g = b.dataset.pg; SCREENS.progress(); $("#lessonpick").scrollIntoView(); });
   app.querySelectorAll("[data-hold]").forEach(b => {
     let t0 = 0, raf = 0;
     const tick = () => { const p = Math.min(1, (Date.now() - t0) / 2000); b.style.setProperty("--p", p); if (p >= 1) { done(); return; } raf = requestAnimationFrame(tick); };
     const done = () => {
-      cancelAnimationFrame(raf); t0 = 0; const [sub, gid] = b.dataset.hold.split(":");
+      cancelAnimationFrame(raf); t0 = 0; const [sub, gid, ...rest] = b.dataset.hold.split(":");
       if (sub === "reset") { St.reset(); toast("Progress reset"); }
+      else if (sub === "lesson") {
+        const [g, act, on] = rest; St.setLesson(gid, g, act, on === "1");
+        if (on === "1") { St.setSubject(gid); St.setLevel(gid, g); toast("Lesson unlocked! It's on the home screen now."); } else toast("Lesson locked");
+        SCREENS.progress(); $("#lessonpick").scrollIntoView(); return;
+      }
       else { D.GRADES.slice(0, gradeIndex(gid) + 1).forEach(g => St.unlock(sub, g.id)); St.setLevel(sub, gid); toast("Unlocked!"); }
       SCREENS.progress();
     };

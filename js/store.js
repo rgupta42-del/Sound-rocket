@@ -7,10 +7,11 @@ window.Store = (() => {
   const GAP = [30e3, 5 * 60e3, 20 * 3600e3, 2 * 864e5, 5 * 864e5, 12 * 864e5];
   const MASTERED = 3;
 
-  const fresh = () => ({ subject: "reading", grade: { reading: "prek", math: "prek" }, open: { reading: ["prek"], math: ["prek"] }, mathRight: {} });
+  const fresh = () => ({ subject: "reading", grade: { reading: "prek", math: "prek" }, open: { reading: ["prek"], math: ["prek"] }, mathRight: {}, lessons: {} });
   let S = { stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, ...fresh() };
   try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s) S = { ...S, ...s }; } catch (e) {}
   // Before grade levels, reading had three planets: pink (3-letter words, now K), blue and green (now 1st grade)
+  if (!S.lessons) S.lessons = {};
   if (Array.isArray(S.unlocked)) {
     const map = { pink: "k", blue: "g1", green: "g1" };
     S.open = { reading: ["prek", ...new Set(S.unlocked.map(l => map[l]).filter(Boolean))], math: ["prek"] };
@@ -100,6 +101,10 @@ window.Store = (() => {
   }
   const isOpen = (subject, g) => S.open[subject].includes(g);
   function unlock(subject, g) { if (!isOpen(subject, g)) { S.open[subject].push(g); save(); return true; } return false; }
+  // Single lessons a grown-up opened on a planet that is otherwise still locked ("math:g3:fractions")
+  const lessonOpen = (subject, g, act) => isOpen(subject, g) || !!S.lessons[`${subject}:${g}:${act}`];
+  const anyLesson = (subject, g) => isOpen(subject, g) || Object.keys(S.lessons).some(k => S.lessons[k] && k.startsWith(`${subject}:${g}:`));
+  function setLesson(subject, g, act, on) { if (on) S.lessons[`${subject}:${g}:${act}`] = true; else delete S.lessons[`${subject}:${g}:${act}`]; save(); }
   function setLevel(subject, g) { S.grade[subject] = g; save(); }
   function setSubject(s) { S.subject = s; save(); }
   // first-try right answers in each math grade (opens the next math planet)
@@ -107,5 +112,5 @@ window.Store = (() => {
   function reset() { S = { stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, migrated: true, ...fresh() }; save(); }
 
   return { get S() { return S; }, GOAL, MASTERED, dayKey, today, touch, item, grade, box, mastered, pick, shuffle, sample, addStars, streak, storyRead,
-    isOpen, unlock, setLevel, setSubject, mathRight, reset, save };
+    isOpen, lessonOpen, anyLesson, setLesson, unlock, setLevel, setSubject, mathRight, reset, save };
 })();
