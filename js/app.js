@@ -763,6 +763,10 @@ SCREENS.progress = () => {
       <p><b>Unlock a whole grade: reading</b></p><div class="row">${holdRow("reading")}</div>
       <p><b>Unlock a whole grade: math</b></p><div class="row">${holdRow("math")}</div>
       <div class="row"><button class="btn try hold" data-hold="reset">Reset progress</button></div></div>
+    <div class="panel"><h3>🔊 Sound check</h3>
+      <p>No sound? Turn the volume up, then tap a test. If test 1 is silent but test 2 works, the game will use the second way automatically.</p>
+      <div class="row"><button class="btn" id="snd1">Test 1</button><button class="btn" id="snd2">Test 2</button></div>
+      <p id="sndinfo"></p></div>
     <div class="panel" id="lessonpick"><h3>Unlock one lesson</h3>
       <p>Open a single lesson on any planet without opening the whole grade. Pick a subject and grade, then hold a lesson for 2 seconds.</p>
       <div class="levels">${["reading", "math"].map(x => `<button data-ps="${x}" aria-pressed="${x === lp.sub}">${x === "reading" ? "📖 Reading" : "🔢 Math"}</button>`).join("")}</div>
@@ -771,6 +775,10 @@ SCREENS.progress = () => {
         const on = St.lessonOpen(lp.sub, lp.g, id);
         return `<div class="lesson"><span>${ico} ${esc(name)}</span><button class="btn hold ${on ? "" : "yes"}" data-hold="lesson:${lp.sub}:${lp.g}:${id}:${on ? 0 : 1}">${on ? "✓ Open · lock" : "Unlock"}</button></div>`; }).join("")}</div>`}
     </div>`);
+  const sndInfo = () => { const i = A.info(); $("#sndinfo").textContent = `Audio: ${i.state}, ${i.rate} Hz, session ${i.session}, played by ${i.path || "nothing yet"}${i.error ? ", problem: " + i.error : ""}`; };
+  $("#snd1").onclick = async () => { await A.play("p_great"); sndInfo(); };
+  $("#snd2").onclick = async () => { await A.playElement("p_great"); sndInfo(); };
+  sndInfo();
   app.querySelectorAll("[data-ps]").forEach(b => b.onclick = () => { lp.sub = b.dataset.ps; SCREENS.progress(); $("#lessonpick").scrollIntoView(); });
   app.querySelectorAll("[data-pg]").forEach(b => b.onclick = () => { lp.g = b.dataset.pg; SCREENS.progress(); $("#lessonpick").scrollIntoView(); });
   app.querySelectorAll("[data-hold]").forEach(b => {
