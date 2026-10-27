@@ -38,31 +38,53 @@ const levelSounds = () => level().sounds || [];
 const wordParts = (l, w) => (levelWords(l).find(x => x[0] === w) || [w, "", D.tiles(w).map(t => ({ d: t, s: t, clip: SN(t), kind: "sound" }))])[2];
 
 // ---------- shared UI ----------
+// Top of every screen: title, streak, total stars, and the rocket, which fills with today's stars.
+// 20 stars today = mission complete and the rocket blasts off; every 20 after that is a bonus blast-off.
+const fuel = () => { const t = St.today().stars, done = t >= St.GOAL, f = done ? (t - St.GOAL) % St.GOAL : t;
+  return { pct: f / St.GOAL * 100, label: done ? `Mission done! Bonus ${f}/${St.GOAL}` : `${t}/${St.GOAL} stars today`, done }; };
+const ROCKET = `<svg class="rocket" id="rocket" viewBox="0 0 40 40" aria-hidden="true">
+  <path d="M20 3c7 6 9 14 7 23H13c-2-9 0-17 7-23z" fill="#E8EEFF"/><circle cx="20" cy="15" r="4" fill="#7AAEFF" stroke="#17203F" stroke-width="1.5"/>
+  <path d="M13 22l-6 8 7-1zM27 22l6 8-7-1z" fill="#DC3B3B"/><path class="flame" d="M16 27h8l-4 9z" fill="#FFC83A"/></svg>`;
 function shell(title, inner, opts = {}) {
-  const S = St.S, f = S.stars % 20;
+  const S = St.S, f = fuel(), streak = St.streak();
   app.innerHTML = `
     <div class="bar">
-      ${opts.home ? "" : `<button class="back" id="back" aria-label="Back to mission control">←</button>`}
+      ${opts.home ? "" : `<button class="back" id="back" aria-label="Back to home">←</button>`}
       <h1>${title}</h1>
-      <div class="starcount" aria-label="Stars"><b>★</b><span id="stars">${S.stars}</span></div>
+      ${streak ? `<div class="streak" aria-label="${streak} day streak">🔥<span>${streak}</span></div>` : ""}
+      <div class="starcount" aria-label="${S.stars} stars"><b>★</b><span id="stars">${S.stars}</span></div>
     </div>
-    <div class="fuel">
-      <svg class="rocket" id="rocket" viewBox="0 0 40 40" aria-hidden="true">
-        <path d="M20 3c7 6 9 14 7 23H13c-2-9 0-17 7-23z" fill="#E8EEFF"/>
-        <circle cx="20" cy="15" r="4" fill="#7AAEFF" stroke="#17203F" stroke-width="1.5"/>
-        <path d="M13 22l-6 8 7-1zM27 22l6 8-7-1z" fill="#DC3B3B"/><path d="M16 27h8l-4 9z" fill="#FFC83A"/>
-      </svg>
-      <div class="gauge" role="progressbar" aria-label="Rocket fuel" aria-valuemin="0" aria-valuemax="20" aria-valuenow="${f}"><i id="fuelbar" style="width:${f / 20 * 100}%"></i></div>
-      <small>${S.launches} ${S.launches === 1 ? "launch" : "launches"}</small>
+    <div class="fuel ${f.done ? "done" : ""}" id="fuel" role="progressbar" aria-label="Today's mission: fill the rocket with ${St.GOAL} stars" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(f.pct)}">
+      ${ROCKET}<div class="gauge"><i id="fuelbar" style="width:${f.pct}%"></i><span id="fuellabel">${f.label}</span></div>
     </div>
     ${roundBar()}${inner}`;
   const b = $("#back"); if (b) b.onclick = () => go("home");
+  $("#fuel").onclick = () => toast(f.done ? "Mission complete! Every 20 more stars launches the rocket again 🚀" : `Fill the rocket with ${St.GOAL} stars today and it blasts off! 🚀`, 3200);
 }
 function refreshStars() {
-  const S = St.S, f = S.stars % 20;
-  const s = $("#stars"); if (s) s.textContent = S.stars;
-  const fb = $("#fuelbar"); if (fb) fb.style.width = (f / 20 * 100) + "%";
+  const f = fuel();
+  const s = $("#stars"); if (s) s.textContent = St.S.stars;
+  const fb = $("#fuelbar"); if (fb) fb.style.width = f.pct + "%";
+  const fl = $("#fuellabel"); if (fl) fl.textContent = f.label;
+  const fu = $("#fuel"); if (fu) fu.classList.toggle("done", f.done);
 }
+// A big moment: a full-screen card with a bouncing picture, rays and confetti. Tap (or wait) to continue.
+const celebrations = [];
+function celebrate(o) {
+  return new Promise(res => { celebrations.push([o, res]); if (celebrations.length === 1) showNext(); });
+  function showNext() {
+    const [c, done] = celebrations[0];
+    const el = document.createElement("div"); el.className = "celebrate " + (c.kind || ""); el.setAttribute("role", "dialog"); el.setAttribute("aria-label", c.title);
+    el.innerHTML = `<div class="rays" aria-hidden="true"></div><div class="cbox"><div class="cpic">${c.pic}</div><h2>${c.title}</h2>${c.sub ? `<p>${c.sub}</p>` : ""}<small>Tap to continue</small></div>`;
+    document.body.appendChild(el); confetti(160);
+    if (c.clip) A.play(c.clip);
+    let closed = false;
+    const close = () => { if (closed) return; closed = true; el.classList.add("out"); setTimeout(() => { el.remove(); celebrations.shift(); done(); if (celebrations.length) showNext(); }, 250); };
+    el.onclick = close; setTimeout(close, c.ms || 4000);
+  }
+}
+const planetPic = g => `<span class="corb" style="background:${g.orb}"></span>`;
+const STREAKS = [3, 7, 14, 30, 50, 100];
 function pop(text) {
   const p = $("#pop"); p.textContent = text; p.classList.add("show"); setTimeout(() => p.classList.remove("show"), 750);
 }
@@ -87,11 +109,12 @@ async function award(n, clips) {
   const math = St.S.subject !== "reading";
   const r = St.addStars(n); refreshStars(); pop("+" + n + " ★");
   if (r.launch) {
-    const rk = $("#rocket"); if (rk) rk.classList.add("launch"); confetti(110);
-    await A.play(math ? "p_blast2" : "p_blast");
+    const rk = $("#rocket"); if (rk) rk.classList.add("launch");
+    if (r.goal) await celebrate({ kind: "mission", pic: "🚀", title: "Mission complete!", sub: `${St.GOAL} stars today. The rocket blasts off!`, clip: math ? "p_mission2" : "p_mission" });
+    else { confetti(110); await A.play("p_bonus"); }
     if (rk) { rk.style.transition = "none"; rk.classList.remove("launch"); void rk.offsetWidth; rk.style.transition = ""; }
   } else await A.play(clips || cheer(), 120);
-  if (r.goal) { confetti(140); toast("Mission complete! 20 stars today 🚀", 3500); await A.play(math ? "p_mission2" : "p_mission"); }
+  if (STREAKS.includes(r.streak)) await celebrate({ kind: "streak", pic: "🔥", title: `${r.streak}-day streak!`, sub: "You played every day. Keep it up!", clip: "p_streak" });
   checkUnlocks();
   if (nav !== navId) return new Promise(() => {});
 }
@@ -101,8 +124,8 @@ const doneNeeded = (sub, g) => Math.ceil(lessons(sub, g).length * 0.7);
 function checkUnlocks() {
   D.GRADES.slice(0, -1).forEach((g, i) => {
     const next = D.GRADES[i + 1];
-    for (const sub of St.SUBJECTS) if (St.isOpen(sub, g.id) && doneCount(sub, g.id) >= doneNeeded(sub, g.id) && St.unlock(sub, next.id)) {
-      toast(`New ${SUBJ[sub][1].toLowerCase()} planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
+    for (const sub of St.SUBJECTS) if (St.isOpen(sub, g.id) && doneCount(sub, g.id) >= doneNeeded(sub, g.id) && St.unlock(sub, next.id))
+      celebrate({ kind: "planet", pic: planetPic(next), title: `New planet: ${next.planet}!`, sub: `${SUBJ[sub][0]} ${SUBJ[sub][1]} ${next.label === "K" ? "Kindergarten" : next.label === "Pre-K" ? "Pre-K" : next.label + " grade"} is open.`, clip: "p_levelup" });
   });
 }
 
@@ -141,12 +164,13 @@ async function results() {
     || list[list.findIndex(([id]) => id === r.act) + 1];
   const day = St.today(); (day.rounds || (day.rounds = [])).push({ sub: r.sub, g: r.g, act: r.act, name, stars }); St.save();
   const replay = { ...r }; round = null;
-  shell("Round complete!", `<section class="card results">
+  shell("Round done!", `<section class="card results">
     <p class="prompt big">${esc(name)}</p>
-    <div class="bigstars">${starRow(stars)}</div>
+    <div class="bigstars" aria-label="${stars} of 3 stars">${[1, 2, 3].map(i => `<span class="bs ${i <= stars ? "on" : ""}" style="animation-delay:${.25 + i * .35}s">${i <= stars ? "★" : "☆"}</span>`).join("")}</div>
+    ${stars >= 2 && prev < 2 ? `<div class="stamp">✓ Checked off!</div>` : ""}
     <p class="score">${r.right} of ${r.total} right the first time</p>
     <p class="prompt">${better ? (prev ? "New best! " : "") + (bonus ? `+${bonus} bonus stars ⭐` : "") : stars >= 2 ? "Great job! Your best is " + prev + " stars." : "Keep practicing. Every round makes you stronger!"}</p>
-    ${stars >= 2 ? `<p class="prompt">✓ This activity counts toward the next planet.</p>` : `<p class="prompt">Get 2 stars to check off this activity.</p>`}
+    ${stars >= 2 ? (prev >= 2 ? `<p class="prompt">✓ Already checked off.</p>` : "") : `<p class="prompt">Get ★★ to check off this activity.</p>`}
     <div class="row"><button class="btn yes big" id="again">↻ Play again</button>${nextAct ? `<button class="btn big" id="nextact">Next: ${esc(nextAct[2])} →</button>` : ""}</div>
     <div class="row"><button class="btn" id="home">🏠 Home</button></div></section>`);
   if (stars === 3) confetti(120);
@@ -154,7 +178,8 @@ async function results() {
   $("#again").onclick = () => open(replay.sub, replay.act);
   if (nextAct) $("#nextact").onclick = () => open(replay.sub, nextAct[0]);
   $("#home").onclick = () => go("home");
-  if (bonus) await award(bonus, [stars === 3 ? "p_round3" : "p_roundbest"]); else { A.play(stars >= 2 ? "p_round" : "p_roundtry"); checkUnlocks(); }
+  const praise = stars >= 2 && prev < 2 ? "p_checked" : stars === 3 ? "p_round3" : "p_roundbest";
+  if (bonus) await award(bonus, [praise]); else { A.play(stars >= 2 ? "p_round" : "p_roundtry"); checkUnlocks(); }
 }
 const lit = (el, on) => el && el.classList.toggle("on", on);
 const partsHTML = (parts, extra = "") => parts.map((p, i) => `<button class="tile ${partClass(p)} ${extra}" data-i="${i}">${esc(p.d)}</button>`).join("");
@@ -214,23 +239,19 @@ function hold(b, fn, ms = 2000) {
   b.onpointerup = b.onpointerleave = b.onpointercancel = () => { cancelAnimationFrame(raf); b.style.setProperty("--p", 0); };
   b.oncontextmenu = e => e.preventDefault();
 }
-function homeActs() {
+// the suggested activity (next unfinished one) glows and says "▶ Next", right in the grid
+function homeActs(next) {
   const sub = St.S.subject, g = St.S.grade[sub];
   return lessons(sub, g).map(([id, ico, name, desc]) => { const locked = !St.lessonOpen(sub, g, id), best = St.best(`${sub}:${g}:${id}`);
-    return `<button class="act ${locked ? "locked" : ""} ${best >= 2 ? "checked" : ""}" data-id="${id}"><span class="ico">${locked ? "🔒" : ico}</span><b>${name}</b>${young() ? "" : `<small>${desc}</small>`}
+    return `<button class="act ${locked ? "locked" : ""} ${best >= 2 ? "checked" : ""} ${id === next ? "next" : ""}" data-id="${id}">${id === next ? `<span class="nextbadge">▶ Next</span>` : ""}<span class="ico">${locked ? "🔒" : ico}</span><b>${name}</b>${young() ? "" : `<small>${desc}</small>`}
       <span class="actfoot">${locked ? "" : starRow(best) + (best >= 2 ? `<span class="check">✓</span>` : "")}</span></button>`; }).join("");
 }
 SCREENS.home = () => {
-  const S = St.S, d = St.today(), pct = Math.min(1, d.stars / St.GOAL), streak = St.streak(), sub = S.subject, cur = GRADE(S.grade[sub]);
-  const ring = `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="34" fill="none" stroke="#33478A" stroke-width="12"/>
-    ${pct > 0 ? `<circle cx="42" cy="42" r="34" fill="none" stroke="#FFC83A" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(pct * 213.6).toFixed(1)} 213.6" transform="rotate(-90 42 42)"/>` : ""}
-    <text x="42" y="50" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="26" fill="#fff">${d.stars >= St.GOAL ? "✓" : d.stars}</text></svg>`;
+  const S = St.S, sub = S.subject, cur = GRADE(S.grade[sub]);
   const rec = recommended(sub, cur.id);
   shell("Sound Rocket", `
-    <div class="toprow"><button class="kidchip" id="kids"><span>${esc(St.kid().ava)}</span><b>${esc(St.kid().name)}</b></button>
-      <button class="minimission" id="mission" aria-label="Today's mission: ${d.stars} of ${St.GOAL} stars">${ring}<small>${streak ? streak + " 🔥" : "today"}</small></button>
+    <div class="toprow"><button class="kidchip" id="kids" aria-label="Player: ${esc(St.kid().name)}. Change player"><span>${esc(St.kid().ava)}</span><b>${esc(St.kid().name)}</b><small>⇄ Change</small></button>
       <button class="help" id="help" aria-label="How to play">❓</button></div>
-    ${rec ? `<button class="hero" id="play"><span class="ico">${rec[1]}</span><span><small>▶ Play</small><b>${esc(rec[2])}</b></span></button>` : ""}
     <div class="subjects" role="tablist" aria-label="Subject">
       ${St.SUBJECTS.map(x => `<button role="tab" data-s="${x}" aria-selected="${sub === x}"><span class="si">${SUBJ[x][0]}</span><span>${SUBJ[x][1]}</span></button>`).join("")}</div>
     <div class="planets" role="group" aria-label="Choose a grade">${D.GRADES.map(g => {
@@ -238,8 +259,8 @@ SCREENS.home = () => {
       return `<button class="planet ${locked ? "locked" : ""}" data-l="${g.id}" aria-pressed="${g.id === cur.id}" aria-label="${g.label}, ${g.planet}${locked ? ", locked" : ""}">
         <span class="orb" style="background:${g.orb}"></span><b>${locked ? "🔒 " : ""}${g.label}</b><small>${g.planet}</small></button>`;
     }).join("")}</div>
+    <div class="acts">${homeActs(rec && rec[0])}</div>
     ${nextPlanetBar(sub)}
-    <div class="acts">${homeActs()}</div>
     <button class="grownup hold" id="prog">👪 Grown-ups: press and hold</button>`, { home: true });
   app.querySelectorAll(".subjects button").forEach(b => talkFirst(b, SUBJ[b.dataset.s][1], () => { St.setSubject(b.dataset.s); SCREENS.home(); }));
   app.querySelectorAll(".planet").forEach(b => b.onclick = () => {
@@ -250,10 +271,8 @@ SCREENS.home = () => {
   app.querySelectorAll(".act").forEach(b => b.classList.contains("locked")
     ? b.onclick = () => toast("This one is locked. A grown-up can unlock it.", 3000)
     : talkFirst(b, names[b.dataset.id], () => openAct(sub, b.dataset.id)));
-  if (rec) $("#play").onclick = () => openAct(sub, rec[0]);
-  $("#mission").onclick = () => { toast(d.stars >= St.GOAL ? `Mission complete! ${d.stars} stars today 🚀` : `Today's mission: ${St.GOAL} stars. ${St.GOAL - d.stars} to go!${streak ? ` ${streak} day streak 🔥` : ""}`, 3200); };
   const pg = $("#prog"); hold(pg, () => go("progress")); pg.onclick = () => toast("Grown-ups: press and hold the button for 2 seconds.", 2600);
-  $("#kids").onclick = () => go(St.kids().length > 1 ? "kids" : "newkid");
+  $("#kids").onclick = () => go("kids");
   $("#help").onclick = () => go("howto");
 };
 
@@ -276,10 +295,10 @@ SCREENS.howto = () => {
   const steps = [
     ["📚", "Pick a subject", "Reading, Math or Geography. Tap the tabs at the top of the home screen."],
     ["🪐", "Pick a planet", "Each planet is a grade, from the Moon (Pre-K) to Pluto (5th grade). A 🔒 planet isn't open yet."],
-    ["👆", "Play an activity", "Tap the big ▶ Play button, or any card. On Pre-K and K, the first tap says the card's name and the second tap opens it. Tap 🔊 Hear it any time to hear the question again."],
+    ["👆", "Play an activity", "Tap a card. The one marked ▶ Next is a good one to do now. On Pre-K and K, the first tap says the card's name and the second tap opens it. Tap 🔊 Hear it any time to hear the question again."],
     ["⭐", "Earn stars", "Right answers earn stars. Wrong answers never take stars away: just try again."],
     ["🏁", "Finish rounds", "Each activity is a short round of questions (the dots at the top show how many are left). At the end you get up to 3 stars: ★★ or more checks it off ✓. Play again any time to beat your best."],
-    ["🚀", "Fill the rocket", "Every 20 stars fills the fuel bar and the rocket blasts off. Get 20 stars in a day for Today's mission, and play every day for a streak 🔥."],
+    ["🚀", "Fill the rocket", "The bar at the top fills with today's stars. 20 stars is today's mission: the rocket blasts off! Keep going for bonus blast-offs. Play every day to grow your streak 🔥."],
     ["🔓", "Open new planets", "Check off most activities on a planet and the next planet opens. The Next planet bar on the home screen shows how many you've done."],
     ["👪", "For grown-ups", "Press and hold 👪 Grown-ups at the bottom of the home screen for a weekly summary, what your child needs help with, grades and lessons, players and backups."]
   ];
@@ -927,7 +946,7 @@ SCREENS.progress = (tab) => {
     const gradeRow = sub => D.GRADES.map(g => `<button class="btn hold ${g.id === S.grade[sub] ? "yes" : ""}" data-hold="${sub}:${g.id}">${g.label}</button>`).join("");
     body = `
     <div class="panel"><h3>${esc(kid.ava)} ${esc(kid.name)}</h3>
-      <div class="row"><button class="btn" id="rename">Rename</button><button class="btn" id="players">${St.kids().length > 1 ? "Switch player" : "Add another child"}</button></div></div>
+      <div class="row"><button class="btn" id="rename">Rename</button><button class="btn" id="players">Players</button></div></div>
     <div class="panel"><h3>Grades</h3>
       <p>Hold a grade for 2 seconds to move ${esc(kid.name)} there. Grades before it open too.</p>
       ${St.SUBJECTS.map(sub => `<p><b>${SUBJ[sub].join(" ")}</b>: now on ${GRADE(S.grade[sub]).label}</p><div class="row">${gradeRow(sub)}</div>`).join("")}
@@ -951,7 +970,8 @@ SCREENS.progress = (tab) => {
         <li><b>Short and often:</b> 10 minutes a day beats an hour on Saturday. The daily goal is ${St.GOAL} stars from all subjects together.</li>
         <li><b>Planets are grades:</b> Moon is Pre-K, Mars K, Jupiter 1st, Saturn 2nd, Uranus 3rd, Neptune 4th and Pluto 5th grade.</li>
         <li><b>Rounds:</b> each activity is a round of 10 questions (6 on Pre-K and K). ★★ or better checks it off; about 70% of a planet checked off opens the next one. Replays only add bonus stars when they beat the best score.</li>
-        <li><b>The ▶ Play button</b> on the home screen starts the next unfinished activity, so a child never has to choose.</li>
+        <li><b>▶ Next:</b> the home screen marks the next unfinished activity, so a child always knows what to play.</li>
+        <li><b>The rocket</b> at the top fills with today's stars. ${St.GOAL} stars completes the daily mission and launches it; every ${St.GOAL} after that is a bonus launch.</li>
         <li><b>Little ones:</b> on Pre-K and K, the first tap on a card says its name and the second tap opens it.</li>
         <li><b>Reading:</b> letter sounds (Pre-K), 3-letter words (K), blends and sh ch th (1st), long vowels and bossy r (2nd), then syllables, prefixes, suffixes and roots with word meanings and longer stories (3rd to 5th).</li>
         <li><b>Math:</b> counting, shapes and patterns (Pre-K), adding within 10 (K), facts to 20 and tens and ones (1st), 2-digit numbers, money and time (2nd), times tables and fractions (3rd), multi-digit work and decimals (4th), fraction and decimal operations (5th).</li>
@@ -973,7 +993,7 @@ SCREENS.progress = (tab) => {
   app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => SCREENS.progress(b.dataset.tab));
   const on = (id, f) => { const e = $(id); if (e) e.onclick = f; };
   on("#howto", () => go("howto"));
-  on("#players", () => go(St.kids().length > 1 ? "kids" : "newkid"));
+  on("#players", () => go("kids"));
   const sndInfo = () => { const i = A.info(), el = $("#sndinfo"); if (el) el.textContent = `Audio: ${i.state}, ${i.rate} Hz, session ${i.session}, played by ${i.path || "nothing yet"}${i.ios ? ", iPhone/iPad mode" : ""}${i.error ? ", problem: " + i.error : ""}`; };
   on("#snd1", async () => { await A.playWebAudio("p_great"); sndInfo(); });
   on("#snd2", async () => { await A.playElement("p_great"); sndInfo(); });

@@ -6,10 +6,10 @@ A reading, math and geography game from Pre-K to 5th grade. Open it at **https:/
 Share the link with anyone. Each family's progress stays on their own phone or tablet; nothing is sent anywhere.
 - **A player per child:** the first visit asks for the child's name, a picture, and which grade to start reading, math and geography at (any grade from Pre-K to 5th; earlier grades stay open for review). Add more children from the home screen and switch between them.
 - **Grown-ups area** (press and hold 👪 at the bottom of the home screen for 2 seconds, so children don't wander in): **This week** shows minutes, rounds finished, accuracy, streak, what the child needs help with and what they finished, with per-subject details below; **Settings** moves the child to any grade, opens every planet or a single lesson, renames, backs up and restores, starts over or removes; **Help** has the tips, a sound check and a share button.
-- **For children:** the big **▶ Play** button starts the next unfinished activity, so there's nothing to choose. On Pre-K and K, the first tap on a card or subject says its name out loud and the second tap opens it, so children who can't read yet can still find their way.
+- **For children:** the card marked **▶ Next** (it glows) is the next unfinished activity, so there's always an obvious thing to play. The rocket at the top fills with today's stars: 20 completes the daily mission and it blasts off, every 20 after that is a bonus blast-off, and 🔥 shows the streak. Big moments get a celebration: mission complete, a new planet, an activity checked off, a 3-star round and streaks of 3, 7, 14, 30 days and more. On Pre-K and K, the first tap on a card or subject says its name out loud and the second tap opens it, so children who can't read yet can still find their way.
 
 ## What's in it
-Reading, Math and Geography share seven planets, one per grade. Switch subjects with the 📖 Reading / 🔢 Math / 🌍 Geography tabs on the home screen; each subject unlocks its planets separately, and stars, the rocket and the daily mission are shared.
+Reading, Math and Geography share seven planets, one per grade. Switch subjects with the 📖 Reading / 🔢 Math / 🌍 Geography tabs on the home screen; each subject unlocks its planets separately, and stars, the rocket (today's mission) and the streak are shared.
 
 | Planet | Grade | Reading | Math | Geography |
 |---|---|---|---|---|

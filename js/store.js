@@ -129,14 +129,16 @@ window.Store = (() => {
   const sample = (a, n) => shuffle(a).slice(0, n);
 
   // Stars: returns {launch, goal} so the game can celebrate
+  // The rocket fills with today's stars: the first 20 complete the daily mission (and launch it),
+  // every 20 after that is a bonus launch. Returns what happened so the game can celebrate.
   function addStars(n, subject = S.subject) {
-    const before = Math.floor(S.stars / 20), d = today(), had = d.stars;
+    const d = today(), had = d.stars, firstToday = had === 0;
     S.stars += n; d.stars += n; d.sub[subject] = (d.sub[subject] || 0) + n;
-    const launch = Math.floor(S.stars / 20) > before;
-    if (launch) S.launches++;
+    const launch = Math.floor(d.stars / GOAL) > Math.floor(had / GOAL);
     const goal = had < GOAL && d.stars >= GOAL;
+    if (launch) S.launches++;
     if (goal) S.goalDays[dayKey()] = true;
-    save(); return { launch, goal };
+    save(); return { launch, goal, streak: firstToday ? streak() : 0 };
   }
   function streak() {
     let n = 0; const d = new Date();
