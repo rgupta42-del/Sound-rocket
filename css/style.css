@@ -64,7 +64,7 @@ label.btn{display:inline-flex;align-items:center;justify-content:center}
 .toprow{display:flex;gap:8px}
 .toprow .kidchip{flex:1}
 .help{border:none;border-radius:18px;background:var(--space2);color:#fff;font-size:1.5rem;width:56px;cursor:pointer;flex:none}
-.act.armed,.subjects button.armed{outline:4px solid var(--sun);outline-offset:2px}
+.act.armed{outline:4px solid var(--sun);outline-offset:2px}
 .ptabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:var(--space2);border-radius:18px;padding:5px;position:sticky;top:0;z-index:5}
 .ptabs button{border:none;border-radius:14px;min-height:48px;background:transparent;color:#C5D1F5;font-family:var(--display);font-weight:800;font-size:1rem;cursor:pointer}
 .ptabs button[aria-selected="true"]{background:#fff;color:var(--ink)}

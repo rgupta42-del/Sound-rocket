@@ -5,7 +5,7 @@
 //    Change AUDIO only if existing clips are re-recorded under the same names.
 // Range requests (iPhone/iPad <audio> asks for parts of a file) go straight to the network:
 // a cached whole file can't answer them, and partial responses can't be cached.
-const VERSION = "sound-rocket-v13", AUDIO = "sound-rocket-audio-1";
+const VERSION = "sound-rocket-v14", AUDIO = "sound-rocket-audio-1";
 self.addEventListener("install", e => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil((async () => {
   const keep = await caches.open(AUDIO);

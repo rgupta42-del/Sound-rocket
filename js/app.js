@@ -262,7 +262,8 @@ SCREENS.home = () => {
     <div class="acts">${homeActs(rec && rec[0])}</div>
     ${nextPlanetBar(sub)}
     <button class="grownup hold" id="prog">👪 Grown-ups: press and hold</button>`, { home: true });
-  app.querySelectorAll(".subjects button").forEach(b => talkFirst(b, SUBJ[b.dataset.s][1], () => { St.setSubject(b.dataset.s); SCREENS.home(); }));
+  // switching subjects is one tap (it's easy to undo); little ones hear the subject's name as it switches
+  app.querySelectorAll(".subjects button").forEach(b => b.onclick = () => { St.setSubject(b.dataset.s); SCREENS.home(); if (young()) A.play(labelClip(SUBJ[b.dataset.s][1])); });
   app.querySelectorAll(".planet").forEach(b => b.onclick = () => {
     if (!St.anyLesson(sub, b.dataset.l)) { toast("Earn more stars to fly here. A grown-up can unlock it.", 3200); return; }
     St.setLevel(sub, b.dataset.l); SCREENS.home();
@@ -972,7 +973,7 @@ SCREENS.progress = (tab) => {
         <li><b>Rounds:</b> each activity is a round of 10 questions (6 on Pre-K and K). ★★ or better checks it off; about 70% of a planet checked off opens the next one. Replays only add bonus stars when they beat the best score.</li>
         <li><b>▶ Next:</b> the home screen marks the next unfinished activity, so a child always knows what to play.</li>
         <li><b>The rocket</b> at the top fills with today's stars. ${St.GOAL} stars completes the daily mission and launches it; every ${St.GOAL} after that is a bonus launch.</li>
-        <li><b>Little ones:</b> on Pre-K and K, the first tap on a card says its name and the second tap opens it.</li>
+        <li><b>Little ones:</b> on Pre-K and K, the first tap on an activity card says its name and the second tap opens it. Subject tabs switch on one tap and say their name.</li>
         <li><b>Reading:</b> letter sounds (Pre-K), 3-letter words (K), blends and sh ch th (1st), long vowels and bossy r (2nd), then syllables, prefixes, suffixes and roots with word meanings and longer stories (3rd to 5th).</li>
         <li><b>Math:</b> counting, shapes and patterns (Pre-K), adding within 10 (K), facts to 20 and tens and ones (1st), 2-digit numbers, money and time (2nd), times tables and fractions (3rd), multi-digit work and decimals (4th), fraction and decimal operations (5th).</li>
         <li><b>Geography:</b> land and water, places in town and weather (Pre-K and K), continents, oceans, compass and map symbols (1st), landforms and where animals live (2nd), US states, flags and countries (3rd), state capitals and US regions (4th), world capitals, latitude and climate zones (5th).</li>
