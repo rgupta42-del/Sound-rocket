@@ -598,7 +598,7 @@ SCREENS.story = (id) => {
     });
     $("#read").onclick = () => A.play("sent_" + st.id + "_" + page);
     $("#prev").onclick = () => { page--; draw(); };
-    $("#next").onclick = async () => { St.touch(); if (page < st.pages.length - 1) await award(1, "p_nice"); page++; draw(); };
+    $("#next").onclick = async e => { e.currentTarget.disabled = true; St.touch(); if (page < st.pages.length - 1) await award(1, "p_nice"); page++; draw(); };
   };
   const question = () => {
     const [q, answers] = st.q, opts = St.shuffle(answers.map((a, i) => [...a, i]));
@@ -821,7 +821,7 @@ SCREENS.progress = () => {
     <div class="panel"><h3>👋 Share with friends</h3><p>Send this link to other families. Each family's progress stays on their own phone or tablet, and they can add a player for each of their kids.</p>
       <div class="row"><button class="btn yes" id="share">Share Sound Rocket</button></div></div>
     <div class="panel"><h3>🔊 Sound check</h3>
-      <p>No sound? Turn the volume up, then tap a test. If test 1 is silent but test 2 works, the game will use the second way automatically.</p>
+      <p>No sound? Turn the volume up and tap each test. Test 1 plays the way computers do, test 2 the way iPhones and iPads do. If you hear neither, let us know what the line below says.</p>
       <div class="row"><button class="btn" id="snd1">Test 1</button><button class="btn" id="snd2">Test 2</button></div>
       <p id="sndinfo"></p></div>
     <div class="panel" id="lessonpick"><h3>Unlock one lesson</h3>
@@ -832,8 +832,8 @@ SCREENS.progress = () => {
         const on = St.lessonOpen(lp.sub, lp.g, id);
         return `<div class="lesson"><span>${ico} ${esc(name)}</span><button class="btn hold ${on ? "" : "yes"}" data-hold="lesson:${lp.sub}:${lp.g}:${id}:${on ? 0 : 1}">${on ? "✓ Open · lock" : "Unlock"}</button></div>`; }).join("")}</div>`}
     </div>`);
-  const sndInfo = () => { const i = A.info(); $("#sndinfo").textContent = `Audio: ${i.state}, ${i.rate} Hz, session ${i.session}, played by ${i.path || "nothing yet"}${i.error ? ", problem: " + i.error : ""}`; };
-  $("#snd1").onclick = async () => { await A.play("p_great"); sndInfo(); };
+  const sndInfo = () => { const i = A.info(); $("#sndinfo").textContent = `Audio: ${i.state}, ${i.rate} Hz, session ${i.session}, played by ${i.path || "nothing yet"}${i.ios ? ", iPhone/iPad mode" : ""}${i.error ? ", problem: " + i.error : ""}`; };
+  $("#snd1").onclick = async () => { await A.playWebAudio("p_great"); sndInfo(); };
   $("#snd2").onclick = async () => { await A.playElement("p_great"); sndInfo(); };
   sndInfo();
   $("#rename").onclick = () => { const n = (prompt("Child's name", St.kid().name) || "").trim().slice(0, 20); if (n) { St.editKid(St.kid().id, { name: n }); SCREENS.progress(); } };
