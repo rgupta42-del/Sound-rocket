@@ -34,7 +34,6 @@ const soundGroup = s => (s === "c" || s === "k") ? "k" : (D.SOUND_CLIP[s] || s);
 const firstSound = w => soundGroup(D.tiles(w.replace(/-/g, ""))[0]);
 const TRICKY_SET = new Set(D.TRICKY.map(w => w.toLowerCase()));
 const wordKnown = w => ["word:", "build:", "match:", "vocab:"].some(p => St.mastered(p + w));
-const soundBox = s => Math.max(St.box("snd:" + s), St.box("trace:" + s), St.box("spy:" + soundGroup(s)));
 const levelSounds = () => level().sounds || [];
 const wordParts = (l, w) => (levelWords(l).find(x => x[0] === w) || [w, "", D.tiles(w).map(t => ({ d: t, s: t, clip: SN(t), kind: "sound" }))])[2];
 
@@ -410,7 +409,7 @@ function traceScreen(o) {
   const cv = $("#cv"), dpr = Math.min(2, devicePixelRatio || 1);
   const size = cv.getBoundingClientRect().width; cv.width = cv.height = Math.round(size * dpr);
   const g = cv.getContext("2d"), mask = document.createElement("canvas"); mask.width = mask.height = cv.width;
-  const m = mask.getContext("2d");
+  const m = mask.getContext("2d", { willReadFrequently: true });
   const fontPx = cv.width * (disp.length > 2 ? .4 : disp.length > 1 ? .5 : .72);
   const drawLetter = (ctx, color) => { ctx.fillStyle = color; ctx.font = `700 ${fontPx}px Andika, "Century Gothic", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(disp, cv.width / 2, cv.height * .53); };
   function base() {
@@ -421,25 +420,30 @@ function traceScreen(o) {
     for (let i = 0; i < 2500; i++) { g.fillStyle = Math.random() < .5 ? "#0001" : "#fff6"; g.fillRect(Math.random() * cv.width, Math.random() * cv.height, 2 * dpr, 2 * dpr); }
     g.globalCompositeOperation = "source-over";
   }
-  document.fonts && document.fonts.ready.then(() => { base(); m.clearRect(0, 0, mask.width, mask.height); drawLetter(m, "#000"); });
+  // the letter's pixels are read once (and again if the font loads late), not on every finger move
+  let maskData = null, total = 0;
+  const readMask = () => { maskData = m.getImageData(0, 0, mask.width, mask.height).data; total = 0; };
+  document.fonts && document.fonts.ready.then(() => { base(); m.clearRect(0, 0, mask.width, mask.height); drawLetter(m, "#000"); maskData = null; });
   base(); drawLetter(m, "#000");
   const ink = o.vowel ? "#2563EB" : "#DC3B3B";
-  let down = false, last = null, done = false, hits = new Set(), total = 0;
+  let down = false, last = null, done = false, hits = new Set(), rect = null;
   const grid = 14 * dpr;
-  function at(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; }
+  function at(e) { const r = rect || cv.getBoundingClientRect(); return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; }
   function stroke(p) {
     g.strokeStyle = ink; g.lineWidth = 16 * dpr; g.lineCap = "round"; g.lineJoin = "round";
     g.beginPath(); g.moveTo(...(last || p)); g.lineTo(...p); g.stroke(); last = p;
     // count letter cells covered
-    const [x, y] = p, md2 = m.getImageData(Math.max(0, x | 0), Math.max(0, y | 0), 1, 1).data[3];
-    if (md2 > 0) hits.add(((x / grid) | 0) + "," + ((y / grid) | 0));
+    if (!maskData) readMask();
+    const x = p[0] | 0, y = p[1] | 0;
+    if (x >= 0 && y >= 0 && x < mask.width && y < mask.height && maskData[(y * mask.width + x) * 4 + 3] > 0) hits.add(((x / grid) | 0) + "," + ((y / grid) | 0));
   }
-  cv.onpointerdown = e => { down = true; last = null; cv.setPointerCapture(e.pointerId); stroke(at(e)); if (!hits.size) A.play(o.clip); };
+  cv.onpointerdown = e => { down = true; last = null; rect = cv.getBoundingClientRect(); cv.setPointerCapture(e.pointerId); stroke(at(e)); if (!hits.size) A.play(o.clip); };
   cv.onpointermove = e => { if (down) stroke(at(e)); };
   cv.onpointerup = cv.onpointercancel = async () => {
-    down = false; last = null;
+    down = false; last = null; rect = null;
+    if (!maskData) readMask();
     if (!total) { // letter cells in the mask
-      const d = m.getImageData(0, 0, mask.width, mask.height).data; const cells = new Set();
+      const d = maskData, cells = new Set();
       for (let y = 0; y < mask.height; y += 4) for (let x = 0; x < mask.width; x += 4) if (d[(y * mask.width + x) * 4 + 3] > 0) cells.add(((x / grid) | 0) + "," + ((y / grid) | 0));
       total = cells.size;
     }
@@ -734,7 +738,7 @@ function practice(sub, id) {
   shell(entry[2] || sk.name, `<section class="card math">
     <p class="prompt big">${p.q}</p>
     ${p.vis ? `<div class="mvis">${p.vis}</div>` : ""}
-    ${p.choices ? `<div class="mchoices ${p.wide ? "wide" : ""} ${p.maps ? "maps" : ""}">${p.choices.map((c, i) => `<button class="mchoice" data-i="${i}">${c.html}</button>`).join("")}</div>`
+    ${p.choices ? `<div class="mchoices ${p.wide ? "wide" : ""} ${p.maps ? "maps" : ""} ${p.choices.some(c => !/[<]/.test(c.html) && c.html.length > 10) ? "long" : ""}">${p.choices.map((c, i) => `<button class="mchoice" data-i="${i}">${c.html}</button>`).join("")}</div>`
       : `<div class="pad"><output class="padout" id="out" aria-live="polite"></output><div class="keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9, p.pad.dec ? "." : "", 0, "⌫"].map(k => k === "" ? "<span></span>" : `<button class="key" data-k="${k}">${k}</button>`).join("")}</div>
         <button class="btn yes big" id="check">Check ✓</button></div>`}
     <div class="row"><button class="btn" id="hear">🔊 Hear it</button><button class="btn" id="skip">Skip</button></div></section>`);
@@ -744,7 +748,7 @@ function practice(sub, id) {
   let miss = 0, busy = false;
   const right = async () => {
     busy = true; const first = miss === 0;
-    St.grade(key, first, sub); if (first) St.mathRight(g, sub);
+    St.grade(key, first, sub);
     await award(first ? 2 : 1, [...(p.after || []), cheer()].filter(Boolean)); await wait(250); advance(first, again);
   };
   // after two misses, show the answer and move on: no stars lost, and it comes back sooner
@@ -804,7 +808,7 @@ function numberCards(g) {
       <button class="tile num" id="t">${n}</button>${n ? M.objs(n, e) : `<p class="prompt">zero means none at all</p>`}
       <button class="btn yes big" id="next">I said it! Next step →</button>`;
     $("#t").onclick = say; A.play(["p_thisis", "n_" + n], 150);
-    $("#next").onclick = async () => { St.grade(k, true, "math"); St.mathRight(g); await award(1); p2(true); };
+    $("#next").onclick = async () => { St.grade(k, true, "math"); await award(1); p2(true); };
   } else if (period === 2) p2(false); else p3();
   function p2(fromP1) {
     const opts = St.shuffle([n, ...St.sample(pool.filter(x => x !== n), 2)]);
@@ -814,7 +818,7 @@ function numberCards(g) {
     $("#again").onclick = ask; ask();
     let miss = 0;
     card.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-      if (+b.dataset.n === n) { b.classList.add("good"); St.grade(k, !miss, "math"); if (!miss) St.mathRight(g); await award(miss ? 1 : 2, ["n_" + n, cheer()]); fromP1 ? p3() : advance(!miss, next); }
+      if (+b.dataset.n === n) { b.classList.add("good"); St.grade(k, !miss, "math"); await award(miss ? 1 : 2, ["n_" + n, cheer()]); fromP1 ? p3() : advance(!miss, next); }
       else { miss++; b.classList.add("bad"); await A.play(["n_" + b.dataset.n, "p_notquite"], 200); ask(); }
     });
   }
@@ -824,7 +828,7 @@ function numberCards(g) {
         <button class="btn yes big" id="ok">Said it! +1</button><button class="btn try" id="help">Help me</button><button class="btn" id="skip">Skip</button></div></div>`;
     A.play("m_whatnum"); $("#t").onclick = say;
     let helped = false;
-    $("#ok").onclick = async () => { St.grade(k, !helped, "math"); St.mathRight(g); await award(1); advance(!helped, next); };
+    $("#ok").onclick = async () => { St.grade(k, !helped, "math"); await award(1); advance(!helped, next); };
     $("#help").onclick = () => { helped = true; St.grade(k, false, "math"); A.play(["p_thisis", "n_" + n], 150); };
     $("#skip").onclick = () => advance(false, next);
   }
@@ -834,7 +838,7 @@ function traceNumber(g) {
   const k = pickR(M.SK.tracenum.keys(g)), n = k.split(":")[2];
   traceScreen({ title: "Trace Numbers", prompt: "Trace the number with your finger. Say its name as you trace.", disp: n, vowel: true,
     kw: +n ? M.objs(+n, M.EMOJI[n % M.EMOJI.length]) : "", say: ["m_tracenum", "n_" + n], hear: ["n_" + n], clip: "n_" + n, skipLabel: "Next number",
-    done: async () => { St.grade(k, true, "math"); St.mathRight(g); await award(1, ["n_" + n, cheer()]); }, next: () => traceNumber(g) });
+    done: async () => { St.grade(k, true, "math"); await award(1, ["n_" + n, cheer()]); }, next: () => traceNumber(g) });
 }
 
 // ---------- PROGRESS + GROWN-UP CORNER ----------

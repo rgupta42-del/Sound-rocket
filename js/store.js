@@ -11,7 +11,7 @@ window.Store = (() => {
   const MASTERED = 3;
 
   const SUBJECTS = ["reading", "math", "geo"];
-  const fresh = () => ({ subject: "reading", grade: { reading: "prek", math: "prek", geo: "prek" }, open: { reading: ["prek"], math: ["prek"], geo: ["prek"] }, mathRight: {}, geoRight: {}, lessons: {}, best: {} });
+  const fresh = () => ({ subject: "reading", grade: { reading: "prek", math: "prek", geo: "prek" }, open: { reading: ["prek"], math: ["prek"], geo: ["prek"] }, lessons: {}, best: {} });
   const blank = () => ({ stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, migrated: true, ...fresh() });
   const read = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
@@ -21,8 +21,8 @@ window.Store = (() => {
     if (!s.lessons) s.lessons = {};
     // subjects added later start at Pre-K
     for (const sub of SUBJECTS) { if (!s.grade[sub]) s.grade[sub] = "prek"; if (!s.open[sub]) s.open[sub] = ["prek"]; }
-    if (!s.geoRight) s.geoRight = {};
     if (!s.best) s.best = {};
+    delete s.mathRight; delete s.geoRight;   // old answer counters, replaced by activity stars
     // Before grade levels, reading had three planets: pink (3-letter words, now K), blue and green (now 1st grade)
     if (Array.isArray(s.unlocked)) {
       const map = { pink: "k", blue: "g1", green: "g1" };
@@ -156,10 +156,6 @@ window.Store = (() => {
   function setLesson(subject, g, act, on) { if (on) S.lessons[`${subject}:${g}:${act}`] = true; else delete S.lessons[`${subject}:${g}:${act}`]; save(); }
   function setLevel(subject, g) { S.grade[subject] = g; save(); }
   function setSubject(s) { S.subject = s; save(); }
-  // first-try right answers in each math or geography grade (opens the next planet)
-  const rightField = sub => sub === "geo" ? "geoRight" : "mathRight";
-  function mathRight(g, sub = "math") { const f = S[rightField(sub)]; f[g] = (f[g] || 0) + 1; save(); return f[g]; }
-  const rightCount = (sub, g) => S[rightField(sub)][g] || 0;
   // best round score (0-3 stars) for each activity on each planet: "math:g3:fractions"
   const best = key => S.best[key] || 0;
   function setBest(key, stars) { const prev = best(key); if (stars > prev) { S.best[key] = stars; save(); } return prev; }
@@ -167,6 +163,6 @@ window.Store = (() => {
   function reset() { const keep = { grade: S.grade, open: S.open, subject: S.subject }; S = { ...blank(), ...keep }; save(); }
 
   return { get S() { return S; }, GOAL, MASTERED, dayKey, today, touch, item, grade, box, mastered, pick, shuffle, sample, addStars, streak, storyRead,
-    SUBJECTS, rightCount, best, setBest, isOpen, lessonOpen, anyLesson, setLesson, unlock, setLevel, setSubject, mathRight, reset, save,
+    SUBJECTS, best, setBest, isOpen, lessonOpen, anyLesson, setLesson, unlock, setLevel, setSubject, reset, save,
     kids, kid, switchKid, addKid, editKid, removeKid, exportKid, importKid };
 })();

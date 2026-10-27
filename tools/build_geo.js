@@ -6,7 +6,8 @@ const req = m => require(require.resolve(m, { paths: [__dirname, process.cwd()] 
 const topo = req("topojson-client"), simp = req("topojson-simplify"), d3 = req("d3-geo");
 const { countries } = req("countries-list"), iso = req("i18n-iso-countries");
 const world = req("world-atlas/countries-110m.json"), us = req("us-atlas/states-albers-10m.json");
-const r1 = s => s.replace(/(\d+\.\d)\d+/g, "$1");
+// whole map units are plenty at phone size (a unit is under half a screen pixel)
+const r1 = s => s.replace(/-?\d+\.\d+/g, n => String(Math.round(+n)));
 
 // ---- world: Natural Earth projection, 960 x 500 ----
 const W = 960, H = 500;

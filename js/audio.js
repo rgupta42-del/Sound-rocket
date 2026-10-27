@@ -16,14 +16,17 @@ window.Audio2 = (() => {
   try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
 
   const url = name => "audio/" + name + ".mp3";
-  const fetchRaw = name => {
-    if (!raw.has(name)) raw.set(name, fetch(url(name)).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null));
-    return raw.get(name);
-  };
-  const blobUrl = name => {
-    if (!blobs.has(name)) blobs.set(name, fetchRaw(name).then(b => b ? URL.createObjectURL(new Blob([b], { type: "audio/mpeg" })) : null));
-    return blobs.get(name);
-  };
+  // Keep only the most recently used clips in memory (a decoded clip is ~150 KB), so long sessions stay light.
+  const LIMIT = 150;
+  function remember(map, name, make, drop) {
+    if (map.has(name)) { const v = map.get(name); map.delete(name); map.set(name, v); return v; }
+    const v = make(); map.set(name, v);
+    if (map.size > LIMIT) { const [old, ov] = map.entries().next().value; map.delete(old); if (drop) ov.then(drop, () => {}); }
+    return v;
+  }
+  const fetchRaw = name => remember(raw, name, () => fetch(url(name)).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null));
+  const blobUrl = name => remember(blobs, name, () => fetchRaw(name).then(b => b ? URL.createObjectURL(new Blob([b], { type: "audio/mpeg" })) : null),
+    u => { if (u && el.src !== u) URL.revokeObjectURL(u); });
 
   // ---------- Web Audio ----------
   function context() {
@@ -35,11 +38,10 @@ window.Audio2 = (() => {
   }
   function load(name) {
     const c = ctx; if (!c) return Promise.resolve(null);
-    if (!decoded.has(name)) decoded.set(name, fetchRaw(name).then(b => !b ? null : new Promise(res => {
+    return remember(decoded, name, () => fetchRaw(name).then(b => !b ? null : new Promise(res => {
       // decodeAudioData takes the buffer over, so give it a copy
       try { const p = c.decodeAudioData(b.slice(0), res, () => { status.error = "decode failed"; res(null); }); if (p && p.catch) p.catch(() => res(null)); } catch (e) { res(null); }
     })));
-    return decoded.get(name);
   }
   async function viaWebAudio(name, my) {
     const c = context(); if (!c) return false;

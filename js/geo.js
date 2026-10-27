@@ -69,7 +69,19 @@ window.GEO = (() => {
   // ---------- pictures ----------
   const FILL = "#E8F1D8", HL = "#F29A1E";
   // world map; hl: {cont} or {country}; dot: [x, y]; lines: equator and prime meridian; zones: tropics and polar circles
+  // The base maps (every country, every state) go into the page once as <symbol>s; each question's map
+  // reuses them with <use> and only adds its own highlight, so a map question is a few KB instead of 140.
+  function defs() {
+    if (typeof document === "undefined" || document.getElementById("geo-world")) return;
+    const W = G.world, U = G.us, el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    el.setAttribute("aria-hidden", "true"); el.style.cssText = "position:absolute;width:0;height:0;overflow:hidden";
+    el.innerHTML = `<symbol id="geo-world" viewBox="0 0 ${W.w} ${W.h}"><path d="${W.outline}" fill="#BFE0FF" stroke="#7FA7D6" stroke-width="1.5"/>
+      <g fill="${FILL}" stroke="#9BB59A" stroke-width=".6">${Object.values(W.countries).map(c => `<path d="${c.d}"/>`).join("")}</g></symbol>
+      <symbol id="geo-us" viewBox="0 0 ${U.w} ${U.h}"><g fill="#CFE3C0" stroke="#fff" stroke-width="1.2">${Object.values(U.states).map(st => `<path d="${st.d}"/>`).join("")}</g></symbol>`;
+    document.body.appendChild(el);
+  }
   function world(o = {}) {
+    defs();
     const W = G.world, id = "c" + Math.random().toString(36).slice(2, 7);
     let hl = "";
     if (o.cont) {
@@ -82,13 +94,13 @@ window.GEO = (() => {
       <text x="8" y="${+W.equator.split(",")[1].split("L")[0] - 6}" font-size="30" font-weight="800" fill="#DC3B3B">Equator</text>` : "";
     const zones = o.zones ? [...W.tropics, ...W.polar].map((d, i) => `<path d="${d}" stroke="${i < 2 ? "#DC3B3B" : "#2563EB"}" stroke-width="2" stroke-dasharray="7 6" fill="none"/>`).join("") : "";
     const dot = o.dot ? `<circle cx="${o.dot[0]}" cy="${o.dot[1]}" r="17" fill="#DC3B3B" stroke="#fff" stroke-width="6"/>` : "";
-    return `<svg class="map ${o.small ? "small" : ""}" viewBox="0 0 ${W.w} ${W.h}" role="img" aria-label="world map"><path d="${W.outline}" fill="#BFE0FF" stroke="#7FA7D6" stroke-width="1.5"/>
-      <g fill="${FILL}" stroke="#9BB59A" stroke-width=".6">${Object.values(W.countries).map(c => `<path d="${c.d}"/>`).join("")}</g>${hl}${zones}${lines}${dot}</svg>`;
+    return `<svg class="map ${o.small ? "small" : ""}" viewBox="0 0 ${W.w} ${W.h}" role="img" aria-label="world map"><use href="#geo-world" width="${W.w}" height="${W.h}"/>${hl}${zones}${lines}${dot}</svg>`;
   }
   function usa(o = {}) {
+    defs();
     const U = G.us, hl = [].concat(o.hl || []);
-    return `<svg class="map ${o.small ? "small" : ""}" viewBox="-10 0 ${U.w + 20} ${U.h}" role="img" aria-label="map of the United States"><g stroke="#fff" stroke-width="1.2">${Object.entries(U.states).map(([n, s]) =>
-      `<path d="${s.d}" fill="${hl.includes(n) ? HL : "#CFE3C0"}"/>`).join("")}</g>
+    return `<svg class="map ${o.small ? "small" : ""}" viewBox="-10 0 ${U.w + 20} ${U.h}" role="img" aria-label="map of the United States"><use href="#geo-us" width="${U.w}" height="${U.h}"/>
+      ${hl.filter(n => U.states[n]).map(n => `<path d="${U.states[n].d}" fill="${HL}" stroke="#fff" stroke-width="1.2"/>`).join("")}
       ${hl.map(n => U.states[n] && U.states[n].area < 900 ? `<circle cx="${U.states[n].c[0]}" cy="${U.states[n].c[1]}" r="20" fill="none" stroke="${HL}" stroke-width="4"/>` : "").join("")}</svg>`;
   }
   // compass rose: only North is labeled, the arrow points somewhere
