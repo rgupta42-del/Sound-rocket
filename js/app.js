@@ -1,5 +1,5 @@
 (() => {
-const D = window.DATA, A = window.Audio2, St = window.Store;
+const D = window.DATA, M = window.MATH, A = window.Audio2, St = window.Store;
 const $ = s => document.querySelector(s);
 const app = $("#app");
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -7,31 +7,33 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 
 // ---------- clip names ----------
 const W = w => "w_" + (w === "I" ? "cap_i" : w.toLowerCase().replace(/[^a-z]/g, ""));
-const SN = s => "s_" + s;
-const isVowel = t => D.VOWELS.includes(t);
+const SN = s => "s_" + (D.SOUND_CLIP[s] || s);
+const isVowel = t => D.VOWELS.includes(D.SOUND_CLIP[t] || t);
 const tileClass = t => isVowel(t) ? "v" : "c";
+// a word tile: vowel sounds blue, consonants red, silent letters grey, syllable chunks dark
+const partClass = p => p.kind === "chunk" ? "k" : p.kind === "silent" ? "x" : tileClass(p.s);
 const CHEERS = ["p_great", "p_gotit", "p_awesome", "p_super", "p_yes", "p_wow", "p_nice"];
-const cheer = () => CHEERS[Math.floor(Math.random() * CHEERS.length)];
+const MATH_CHEERS = ["p_great", "p_gotit", "p_awesome", "p_yes", "p_wow", "p_nice", "p_correct", "p_smart"];
+const cheer = () => { const c = St.S.subject === "math" ? MATH_CHEERS : CHEERS; return c[Math.floor(Math.random() * c.length)]; };
 
 // ---------- content helpers ----------
-const level = () => D.LEVELS.find(l => l.id === St.S.level) || D.LEVELS[0];
+const GRADE = id => D.GRADES.find(g => g.id === id) || D.GRADES[0];
+const gradeIndex = id => D.GRADES.findIndex(g => g.id === id);
+const rgrade = () => St.S.grade.reading;
+const level = () => D.READING[rgrade()] || D.READING.prek;
 const levelWords = l => Object.values(l.words).flat();
 const PICS = {};
 // words whose emoji could mean something else stay out of the picture games
-const NOT_PICTURES = new Set(["red", "green", "ten", "six", "three", "yes", "hot", "sad", "grin", "top", "fog", "man", "kid", "up"]);
-D.LEVELS.forEach(l => levelWords(l).forEach(([w, p]) => { if (p && !NOT_PICTURES.has(w)) PICS[w] = p; }));
+const NOT_PICTURES = new Set(["red", "green", "ten", "six", "three", "nine", "five", "yes", "hot", "sad", "grin", "top", "fog", "man", "kid", "up"]);
+Object.values(D.READING).forEach(l => levelWords(l).forEach(([w, p]) => { if (p && !NOT_PICTURES.has(w) && !PICS[w]) PICS[w] = p; }));
 Object.values(D.SOUNDS).forEach(([, kw, p]) => { if (p && !PICS[kw] && !NOT_PICTURES.has(kw)) PICS[kw] = p; });
-const soundGroup = s => (s === "c" || s === "k") ? "k" : s;
+const soundGroup = s => (s === "c" || s === "k") ? "k" : (D.SOUND_CLIP[s] || s);
 const firstSound = w => soundGroup(D.tiles(w.replace(/-/g, ""))[0]);
 const TRICKY_SET = new Set(D.TRICKY.map(w => w.toLowerCase()));
-const wordKnown = w => St.mastered("word:" + w) || St.mastered("build:" + w) || St.mastered("match:" + w);
-
-// Sounds this level practices. Blue reviews all the letter sounds; green adds the phonograms.
-function levelSounds() {
-  const l = level();
-  if (l.id === "green") return [...D.GREEN_SOUNDS, ...D.PINK_SOUNDS.filter(s => isVowel(s))];
-  return D.PINK_SOUNDS;
-}
+const wordKnown = w => ["word:", "build:", "match:", "vocab:"].some(p => St.mastered(p + w));
+const soundBox = s => Math.max(St.box("snd:" + s), St.box("trace:" + s), St.box("spy:" + soundGroup(s)));
+const levelSounds = () => level().sounds || [];
+const wordParts = (l, w) => (levelWords(l).find(x => x[0] === w) || [w, "", D.tiles(w).map(t => ({ d: t, s: t, clip: SN(t), kind: "sound" }))])[2];
 
 // ---------- shared UI ----------
 function shell(title, inner, opts = {}) {
@@ -75,31 +77,51 @@ function confetti(n = 70) {
   let t = 0;
   (function f() { x.clearRect(0, 0, c.width, c.height); ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += .45; p.a += .2; x.fillStyle = p.c; x.save(); x.translate(p.x, p.y); x.rotate(p.a); x.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * .6); x.restore(); }); if (++t < 80) requestAnimationFrame(f); else x.clearRect(0, 0, c.width, c.height); })();
 }
-// Award stars, celebrate, and play praise. Resolves when the praise finishes.
+// Award stars, celebrate, and play praise. Resolves when the praise finishes,
+// or never if the player has left the screen meanwhile (so the old activity doesn't redraw over the new one).
 async function award(n, clips) {
+  const nav = navId;
   St.touch();
+  const math = St.S.subject === "math";
   const r = St.addStars(n); refreshStars(); pop("+" + n + " ★");
   if (r.launch) {
     const rk = $("#rocket"); if (rk) rk.classList.add("launch"); confetti(110);
-    await A.play("p_blast");
+    await A.play(math ? "p_blast2" : "p_blast");
     if (rk) { rk.style.transition = "none"; rk.classList.remove("launch"); void rk.offsetWidth; rk.style.transition = ""; }
   } else await A.play(clips || cheer(), 120);
-  if (r.goal) { confetti(140); toast("Mission complete! 20 stars today 🚀", 3500); await A.play("p_mission"); }
+  if (r.goal) { confetti(140); toast("Mission complete! 20 stars today 🚀", 3500); await A.play(math ? "p_mission2" : "p_mission"); }
   checkUnlocks();
+  if (nav !== navId) return new Promise(() => {});
+}
+// Reading: a planet opens when enough of the one before is known. Math: after 40 first-try answers.
+const READ_UNLOCK = { prek: 12, k: 20, g1: 20, g2: 15, g3: 15, g4: 15 };
+const MATH_UNLOCK = 40;
+function readingKnown(id) {
+  const l = D.READING[id];
+  if (id === "prek") return D.PINK_SOUNDS.filter(s => soundBox(s) >= St.MASTERED).length;
+  return [...levelWords(l).map(x => x[0]), ...l.vocab.map(v => v[0])].filter(wordKnown).length;
 }
 function checkUnlocks() {
-  const mastered = id => levelWords(D.LEVELS.find(l => l.id === id)).filter(([w]) => wordKnown(w)).length;
-  if (mastered("pink") >= 20 && St.unlock("blue")) { toast("New planet unlocked: Mars! 🔴", 3500); A.play("p_levelup"); }
-  if (mastered("blue") >= 15 && St.unlock("green")) { toast("New planet unlocked: Saturn! 🪐", 3500); A.play("p_levelup"); }
+  D.GRADES.slice(0, -1).forEach((g, i) => {
+    const next = D.GRADES[i + 1];
+    if (St.isOpen("reading", g.id) && readingKnown(g.id) >= READ_UNLOCK[g.id] && St.unlock("reading", next.id)) { toast(`New reading planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
+    if (St.isOpen("math", g.id) && (St.S.mathRight[g.id] || 0) >= MATH_UNLOCK && St.unlock("math", next.id)) { toast(`New math planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
+  });
 }
 const lit = (el, on) => el && el.classList.toggle("on", on);
-const tilesHTML = (parts, extra = "") => parts.map((t, i) => `<button class="tile ${tileClass(t)} ${extra}" data-i="${i}">${t}</button>`).join("");
+const partsHTML = (parts, extra = "") => parts.map((p, i) => `<button class="tile ${partClass(p)} ${extra}" data-i="${i}">${esc(p.d)}</button>`).join("");
+// play the tiles that make a sound, lighting each one as it plays
+function playParts(parts, tiles, gap = 420) {
+  const idx = parts.map((p, i) => p.clip ? i : -1).filter(i => i >= 0);
+  return A.play(idx.map(i => parts[i].clip), gap, j => tiles.forEach((t, k) => lit(t, k === idx[j])));
+}
 
 // ---------- router ----------
 const SCREENS = {};
+let navId = 0;
 function go(name, arg) { A.stop(); location.hash = name === "home" ? "" : name + (arg ? "-" + arg : ""); }
 function route() {
-  A.stop();
+  A.stop(); document.onkeydown = null; navId++;
   const h = location.hash.slice(1), [name, ...rest] = h.split("-");
   (SCREENS[name] || SCREENS.home)(rest.join("-"));
   window.scrollTo(0, 0);
@@ -108,44 +130,65 @@ addEventListener("hashchange", route);
 document.addEventListener("pointerdown", () => St.touch(), { passive: true });
 
 // ---------- HOME ----------
-const ACTS = [
-  ["sounds", "🔤", "Sound Cards", "Learn a letter, find it, say it", "Montessori 3-step lesson"],
-  ["trace", "✍️", "Trace It", "Trace the letter and say its sound", "Sandpaper letters"],
-  ["ispy", "🔭", "I Spy", "Find what starts with the sound", "Listening game"],
-  ["blend", "🧩", "Blend It", "Sound out words, then read them", "With a grown-up"],
-  ["build", "🛠️", "Build a Word", "Hear a word, build it with letters", "Movable alphabet"],
-  ["match", "🖼️", "Read & Match", "Read the word, pick the picture", "Reads on his own"],
-  ["tricky", "⭐", "Tricky Words", "Words you just know by sight", "With a grown-up"],
-  ["stories", "📖", "Storybook", "Read a little story yourself", "Decodable stories"]
-];
+const ACTS = {
+  sounds: ["🔤", "Sound Cards", "Learn a sound, find it, say it", "Montessori 3-step lesson"],
+  trace: ["✍️", "Trace It", "Trace the letter and say its sound", "Sandpaper letters"],
+  ispy: ["🔭", "I Spy", "Find what starts with the sound", "Listening game"],
+  blend: ["🧩", "Blend It", "Sound out words, then read them", "With a grown-up"],
+  build: ["🛠️", "Build a Word", "Hear a word, build it with letters", "Movable alphabet"],
+  match: ["🖼️", "Read & Match", "Read the word, pick the picture", "Reads on his own"],
+  tricky: ["⭐", "Tricky Words", "Words you just know by sight", "With a grown-up"],
+  vocab: ["💬", "Word Meaning", "Read a word, pick what it means", "Vocabulary"],
+  stories: ["📖", "Storybook", "Read a little story yourself", "Stories and questions"]
+};
+// 3rd grade and up read in syllable chunks instead of letter sounds
+const CHUNK_ACTS = {
+  blend: ["🧩", "Chunk It", "Read big words chunk by chunk", "With a grown-up"],
+  build: ["🛠️", "Build a Word", "Put the word's chunks in order", "Syllable tiles"]
+};
+function homeActs() {
+  if (St.S.subject === "math") {
+    return M.GRADE_SKILLS[St.S.grade.math].map(([id, sub, name]) => { const sk = M.SK[id];
+      return `<button class="act" data-m="${id}"><span class="ico">${sk.ico}</span><b>${name || sk.name}</b><small>${sub}</small><span class="tag">${sk.tag}</span></button>`; }).join("");
+  }
+  const l = level();
+  return l.acts.map(id => { const [ico, name, sub, tag] = (l.chunks && CHUNK_ACTS[id]) || ACTS[id];
+    return `<button class="act" data-a="${id}"><span class="ico">${ico}</span><b>${name}</b><small>${sub}</small><span class="tag">${tag}</span></button>`; }).join("");
+}
 SCREENS.home = () => {
-  const S = St.S, d = St.today(), pct = Math.min(1, d.stars / St.GOAL), streak = St.streak();
+  const S = St.S, d = St.today(), pct = Math.min(1, d.stars / St.GOAL), streak = St.streak(), sub = S.subject, cur = GRADE(S.grade[sub]);
   const ring = `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="34" fill="none" stroke="#33478A" stroke-width="10"/>
     ${pct > 0 ? `<circle cx="42" cy="42" r="34" fill="none" stroke="#FFC83A" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(pct * 213.6).toFixed(1)} 213.6" transform="rotate(-90 42 42)"/>` : ""}
     <text x="42" y="48" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="20" fill="#fff">${d.stars}</text></svg>`;
-  const orb = { pink: "radial-gradient(circle at 35% 35%,#fff,#d9d9e3 40%,#9ea1b8)", blue: "radial-gradient(circle at 35% 35%,#ffb39a,#e0603a 55%,#9c3416)", green: "radial-gradient(circle at 35% 35%,#fff1c4,#e7c26a 55%,#a07a2a)" };
+  const blurb = sub === "math" ? M.GRADE_SKILLS[cur.id].map(([, s]) => s).slice(0, 3).join(" · ") : level().blurb;
   shell("Sound Rocket", `
     <div class="mission">${ring}<div><h2>${d.stars >= St.GOAL ? "Mission complete today!" : `Today's mission: ${St.GOAL} stars`}</h2>
-      <p>${d.stars >= St.GOAL ? "Great reading. Keep going for bonus stars!" : `${St.GOAL - d.stars} stars to go`} · ${streak} day streak 🔥</p></div></div>
-    <div class="planets" role="group" aria-label="Choose a planet">${D.LEVELS.map(l => {
-      const locked = !S.unlocked.includes(l.id);
-      return `<button class="planet ${locked ? "locked" : ""}" data-l="${l.id}" aria-pressed="${l.id === S.level}">
-        <span class="orb" style="background:${orb[l.id]}"></span><b>${locked ? "🔒 " : ""}${l.name}</b><small>${l.blurb}</small></button>`;
+      <p>${d.stars >= St.GOAL ? "Great work. Keep going for bonus stars!" : `${St.GOAL - d.stars} stars to go`} · ${streak} day streak 🔥</p></div></div>
+    <div class="subjects" role="tablist" aria-label="Subject">
+      <button role="tab" data-s="reading" aria-selected="${sub === "reading"}">📖 Reading</button>
+      <button role="tab" data-s="math" aria-selected="${sub === "math"}">🔢 Math</button></div>
+    <div class="planets" role="group" aria-label="Choose a grade">${D.GRADES.map(g => {
+      const locked = !St.isOpen(sub, g.id);
+      return `<button class="planet ${locked ? "locked" : ""}" data-l="${g.id}" aria-pressed="${g.id === cur.id}" aria-label="${g.label}, ${g.planet}${locked ? ", locked" : ""}">
+        <span class="orb" style="background:${g.orb}"></span><b>${locked ? "🔒 " : ""}${g.label}</b><small>${g.planet}</small></button>`;
     }).join("")}</div>
-    <div class="acts">${ACTS.map(([id, ico, name, sub, tag]) => `<button class="act" data-a="${id}"><span class="ico">${ico}</span><b>${name}</b><small>${sub}</small><span class="tag">${tag}</span></button>`).join("")}</div>
+    <p class="where"><b>${cur.planet} · ${cur.label === "K" ? "Kindergarten" : cur.label === "Pre-K" ? "Pre-K" : cur.label + " grade"} ${sub}</b>${blurb ? ": " + esc(blurb) : ""}</p>
+    <div class="acts">${homeActs()}</div>
     <button class="grownup" id="prog">📈 Progress and grown-up corner</button>`, { home: true });
+  app.querySelectorAll(".subjects button").forEach(b => b.onclick = () => { St.setSubject(b.dataset.s); SCREENS.home(); });
   app.querySelectorAll(".planet").forEach(b => b.onclick = () => {
-    if (!S.unlocked.includes(b.dataset.l)) { toast("Earn more stars to fly here. A grown-up can unlock it in the Progress page.", 3200); return; }
-    St.setLevel(b.dataset.l); SCREENS.home();
+    if (!St.isOpen(sub, b.dataset.l)) { toast("Earn more stars to fly here. A grown-up can unlock it in the Progress page.", 3200); return; }
+    St.setLevel(sub, b.dataset.l); SCREENS.home();
   });
-  app.querySelectorAll(".act").forEach(b => b.onclick = () => go(b.dataset.a));
+  app.querySelectorAll(".act[data-a]").forEach(b => b.onclick = () => go(b.dataset.a));
+  app.querySelectorAll(".act[data-m]").forEach(b => b.onclick = () => go("math", b.dataset.m));
   $("#prog").onclick = () => go("progress");
 };
 
 // ---------- SOUND CARDS: Montessori three-period lesson ----------
 // 1 "This is /s/" (naming), 2 "Show me /s/" (recognition), 3 "What sound is this?" (recall)
 SCREENS.sounds = () => {
-  const pool = levelSounds();
+  const pool = levelSounds(); if (!pool.length) return go("home");
   const k = St.pick(pool.map(s => "snd:" + s));
   const s = k.slice(4), it = St.item(k);
   const period = !it.seen ? 1 : (it.box >= 2 ? (Math.random() < .65 ? 3 : 2) : (Math.random() < .6 ? 2 : 3));
@@ -203,38 +246,43 @@ function soundP3(s, k) {
   $("#skip").onclick = () => SCREENS.sounds();
 }
 
-// ---------- TRACE IT: sandpaper letters ----------
+// ---------- TRACE IT: sandpaper letters (and sandpaper numerals in math) ----------
 SCREENS.trace = () => {
-  const pool = levelSounds();
+  const pool = levelSounds(); if (!pool.length) return go("home");
   const k = St.pick(pool.map(s => "trace:" + s));
   const s = k.slice(6), [disp, kw, pic] = D.SOUNDS[s];
-  shell("Trace It", `<section class="card">
-    <p class="prompt">Trace the letter with your finger. Say the sound as you trace.</p>
-    <canvas class="trace" id="cv" aria-label="Tracing area for ${disp}"></canvas>
-    <div class="kw"><span>${pic}</span> ${disp}… like ${kw}</div>
-    <div class="row"><button class="btn" id="hear">🔊 Hear it</button><button class="btn" id="clear">Clear</button><button class="btn" id="skip">Next letter</button></div></section>`);
-  A.play(["p_trace", SN(s)], 200);
-  $("#hear").onclick = () => A.play([SN(s), "p_like", W(kw)], 150);
-  $("#skip").onclick = () => SCREENS.trace();
+  traceScreen({ title: "Trace It", prompt: "Trace the letter with your finger. Say the sound as you trace.", disp, vowel: isVowel(s),
+    kw: `<span>${pic}</span> ${disp}… like ${kw}`, say: ["p_trace", SN(s)], hear: [SN(s), "p_like", W(kw)], clip: SN(s), skipLabel: "Next letter",
+    done: async () => { St.grade(k, true, "trace"); await award(1, [SN(s), cheer()]); }, next: () => SCREENS.trace() });
+};
+function traceScreen(o) {
+  const disp = o.disp;
+  shell(o.title, `<section class="card">
+    <p class="prompt">${o.prompt}</p>
+    <canvas class="trace" id="cv" aria-label="Tracing area for ${esc(disp)}"></canvas>
+    ${o.kw ? `<div class="kw">${o.kw}</div>` : ""}
+    <div class="row"><button class="btn" id="hear">🔊 Hear it</button><button class="btn" id="clear">Clear</button><button class="btn" id="skip">${o.skipLabel}</button></div></section>`);
+  A.play(o.say, 200);
+  $("#hear").onclick = () => A.play(o.hear, 150);
+  $("#skip").onclick = o.next;
   const cv = $("#cv"), dpr = Math.min(2, devicePixelRatio || 1);
   const size = cv.getBoundingClientRect().width; cv.width = cv.height = Math.round(size * dpr);
   const g = cv.getContext("2d"), mask = document.createElement("canvas"); mask.width = mask.height = cv.width;
   const m = mask.getContext("2d");
-  const fontPx = cv.width * (disp.length > 1 ? .5 : .72);
+  const fontPx = cv.width * (disp.length > 2 ? .4 : disp.length > 1 ? .5 : .72);
   const drawLetter = (ctx, color) => { ctx.fillStyle = color; ctx.font = `700 ${fontPx}px Andika, "Century Gothic", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(disp, cv.width / 2, cv.height * .53); };
   function base() {
     g.clearRect(0, 0, cv.width, cv.height);
     // sandpaper texture: speckled letter
-    drawLetter(g, isVowel(s) ? "#BFD3FB" : "#F7C3C3");
+    drawLetter(g, o.vowel ? "#BFD3FB" : "#F7C3C3");
     g.globalCompositeOperation = "source-atop";
     for (let i = 0; i < 2500; i++) { g.fillStyle = Math.random() < .5 ? "#0001" : "#fff6"; g.fillRect(Math.random() * cv.width, Math.random() * cv.height, 2 * dpr, 2 * dpr); }
     g.globalCompositeOperation = "source-over";
   }
   document.fonts && document.fonts.ready.then(() => { base(); m.clearRect(0, 0, mask.width, mask.height); drawLetter(m, "#000"); });
   base(); drawLetter(m, "#000");
-  const ink = isVowel(s) ? "#2563EB" : "#DC3B3B";
+  const ink = o.vowel ? "#2563EB" : "#DC3B3B";
   let down = false, last = null, done = false, hits = new Set(), total = 0;
-  const md = () => { const d = m.getImageData(0, 0, mask.width, mask.height).data; let n = 0; for (let i = 3; i < d.length; i += 4 * 64) if (d[i] > 0) n++; return n; };
   const grid = 14 * dpr;
   function at(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; }
   function stroke(p) {
@@ -244,7 +292,7 @@ SCREENS.trace = () => {
     const [x, y] = p, md2 = m.getImageData(Math.max(0, x | 0), Math.max(0, y | 0), 1, 1).data[3];
     if (md2 > 0) hits.add(((x / grid) | 0) + "," + ((y / grid) | 0));
   }
-  cv.onpointerdown = e => { down = true; last = null; cv.setPointerCapture(e.pointerId); stroke(at(e)); if (!hits.size) A.play(SN(s)); };
+  cv.onpointerdown = e => { down = true; last = null; cv.setPointerCapture(e.pointerId); stroke(at(e)); if (!hits.size) A.play(o.clip); };
   cv.onpointermove = e => { if (down) stroke(at(e)); };
   cv.onpointerup = cv.onpointercancel = async () => {
     down = false; last = null;
@@ -254,19 +302,19 @@ SCREENS.trace = () => {
       total = cells.size;
     }
     if (!done && hits.size / total > .55) {
-      done = true; St.grade(k, true, "trace"); await award(1, [SN(s), cheer()]);
-      await wait(400); SCREENS.trace();
+      done = true; await o.done();
+      await wait(400); o.next();
     }
   };
   $("#clear").onclick = () => { base(); hits = new Set(); done = false; };
-};
+}
 
 // ---------- I SPY: beginning sounds ----------
 SCREENS.ispy = () => {
   const words = Object.keys(PICS).filter(w => !["x", "ck", "ng"].includes(firstSound(w)));
   const bySound = {};
   words.forEach(w => (bySound[firstSound(w)] ||= []).push(w));
-  const allowed = new Set(levelSounds().map(soundGroup).concat(level().id === "pink" ? [] : D.GREEN_SOUNDS));
+  const allowed = new Set((rgrade() === "g1" ? [...D.PINK_SOUNDS, ...D.GREEN_SOUNDS] : levelSounds()).map(soundGroup));
   const sounds = Object.keys(bySound).filter(s => allowed.has(s));
   const k = St.pick(sounds.map(s => "spy:" + s), { ordered: false });
   const s = k.slice(4), target = St.sample(bySound[s], 1)[0];
@@ -295,77 +343,85 @@ SCREENS.ispy = () => {
   });
 };
 
-// ---------- BLEND IT: sound out with a grown-up ----------
+// ---------- BLEND IT: sound out with a grown-up (Chunk It from 3rd grade) ----------
 SCREENS.blend = (group) => {
-  const l = level(), groups = Object.keys(l.words);
+  const l = level(), groups = Object.keys(l.words); if (!groups.length) return go("home");
   if (!groups.includes(group)) group = "all";
   const list = group === "all" ? levelWords(l) : l.words[group];
   const k = St.pick(list.map(([w]) => "word:" + w), { maxNew: 4, ordered: false });
-  const w = k.slice(5), pic = PICS[w] || "", parts = D.tiles(w);
-  shell("Blend It", `<section class="card">
+  const w = k.slice(5), pic = PICS[w] || "", parts = wordParts(l, w), chunks = !!l.chunks;
+  shell(chunks ? "Chunk It" : "Blend It", `<section class="card">
     <div class="levels">${["all", ...groups].map(g => `<button aria-pressed="${g === group}" data-g="${esc(g)}">${g === "all" ? "Mix" : esc(g)}</button>`).join("")}</div>
-    <p class="prompt">Tap each letter and say its sound. Then slide them together!</p>
-    <div class="tiles" id="tiles">${tilesHTML(parts)}</div>
+    <p class="prompt">${chunks ? "Tap each chunk and say it. Then read the whole word!" : "Tap each letter and say its sound. Then slide them together!"}</p>
+    <div class="tiles" id="tiles">${partsHTML(parts, chunks ? "sm" : "")}</div>
     <div class="slide"><b id="sl"></b></div>
     <div class="pic" id="pic" aria-hidden="true"></div>
-    <div class="row"><button class="btn" id="slow">👣 Sound it out</button><button class="btn" id="stretch">🐍 Stretch it</button><button class="btn" id="whole">🔊 Word</button></div>
+    <div class="row"><button class="btn" id="slow">👣 ${chunks ? "Chunk it" : "Sound it out"}</button>${chunks ? "" : `<button class="btn" id="stretch">🐍 Stretch it</button>`}<button class="btn" id="whole">🔊 Word</button></div>
     <div class="grown"><p>Grown-up taps</p><div class="row">
-      <button class="btn yes" id="snd">Said the sounds +1</button><button class="btn yes big" id="rd">Read the word! +2</button></div>
+      <button class="btn yes" id="snd">Said the ${chunks ? "chunks" : "sounds"} +1</button><button class="btn yes big" id="rd">Read the word! +2</button></div>
       <div class="row"><button class="btn try" id="again">Try together</button><button class="btn" id="skip">Next word</button></div></div></section>`);
   app.querySelectorAll(".levels button").forEach(b => b.onclick = () => SCREENS.blend(b.dataset.g));
-  A.preload([...parts.map(SN), W(w), "st_" + w]);
+  A.preload([...parts.map(p => p.clip).filter(Boolean), W(w), ...(chunks ? [] : ["st_" + w])]);
   const tiles = [...app.querySelectorAll("#tiles .tile")], seen = new Set();
   const mark = () => $("#sl").style.width = (seen.size / parts.length * 100) + "%";
   const clear = () => tiles.forEach(t => lit(t, false));
-  tiles.forEach(t => t.onclick = async () => { const i = +t.dataset.i; clear(); lit(t, true); seen.add(i); mark(); await A.play(SN(parts[i])); lit(t, false); });
+  tiles.forEach(t => t.onclick = async () => { const i = +t.dataset.i; clear(); lit(t, true); seen.add(i); mark(); await A.play(parts[i].clip || "p_silent"); lit(t, false); });
   async function soundOut() {
-    const ok = await A.play(parts.map(SN), 420, i => { clear(); lit(tiles[i], true); seen.add(i); mark(); });
-    if (!ok) return; clear(); await wait(300); tiles.forEach(t => lit(t, true)); await A.play("st_" + w); await wait(250); await A.play(W(w)); clear();
+    parts.forEach((_, i) => seen.add(i)); mark();
+    const ok = await playParts(parts, tiles, chunks ? 300 : 420);
+    if (!ok) return; clear(); await wait(300); tiles.forEach(t => lit(t, true));
+    if (!chunks) { await A.play("st_" + w); await wait(250); }
+    await A.play(W(w)); clear();
   }
   $("#slow").onclick = soundOut;
-  $("#stretch").onclick = async () => { tiles.forEach(t => lit(t, true)); await A.play("st_" + w); clear(); };
+  if (!chunks) $("#stretch").onclick = async () => { tiles.forEach(t => lit(t, true)); await A.play("st_" + w); clear(); };
   $("#whole").onclick = async () => { tiles.forEach(t => lit(t, true)); await A.play(W(w)); clear(); };
   let soundsDone = false, helped = false;
-  $("#snd").onclick = async () => { if (soundsDone) return; soundsDone = true; $("#snd").disabled = true; await award(1, "p_goodsounds"); };
+  $("#snd").onclick = async () => { if (soundsDone) return; soundsDone = true; $("#snd").disabled = true; await award(1, chunks ? "p_chunks" : "p_goodsounds"); };
   $("#rd").onclick = async () => { $("#pic").textContent = pic || "✅"; St.grade(k, !helped, "blend"); await award(2, [cheer(), W(w)]); await wait(300); SCREENS.blend(group); };
   $("#again").onclick = async () => { helped = true; if (await A.play("p_together")) soundOut(); };
   $("#skip").onclick = () => SCREENS.blend(group);
 };
 
-// ---------- BUILD A WORD: movable alphabet ----------
+// ---------- BUILD A WORD: movable alphabet (syllable tiles from 3rd grade) ----------
 SCREENS.build = () => {
-  const l = level(), list = levelWords(l).filter(([w]) => PICS[w]);
+  const l = level(), chunks = !!l.chunks, list = levelWords(l).filter(([w]) => chunks || PICS[w]);
+  if (!list.length) return go("home");
   const k = St.pick(list.map(([w]) => "build:" + w), { ordered: false });
-  const w = k.slice(6), parts = D.tiles(w);
-  const extras = St.sample(levelSounds().filter(s => !parts.includes(s) && s.length <= 2), parts.length > 3 ? 3 : 2);
+  const w = k.slice(6), parts = wordParts(l, w);
+  // spare tiles come from the other words on this planet
+  const spare = new Map(); levelWords(l).forEach(([, , ps]) => ps.forEach(p => { if (!parts.some(q => q.d === p.d) && p.clip) spare.set(p.d, p); }));
+  const extras = St.sample([...spare.values()], parts.length > 3 ? 3 : 2);
   const tray = St.shuffle([...parts, ...extras]);
   shell("Build a Word", `<section class="card">
     <p class="prompt big">Build the word</p>
-    <button class="pic" id="pic" style="background:none;border:none;cursor:pointer" aria-label="Hear the word">${PICS[w]}</button>
-    <div class="boxes" id="boxes">${parts.map((p, i) => `<div class="box" data-i="${i}"></div>`).join("")}</div>
-    <div class="tiles" id="tray">${tray.map((t, i) => `<button class="tile sm ${tileClass(t)}" data-t="${t}" data-i="${i}">${t}</button>`).join("")}</div>
-    <div class="row"><button class="btn" id="hear">🔊 Hear the word</button><button class="btn" id="hint">💡 Next sound</button><button class="btn" id="skip">Skip</button></div></section>`);
-  A.preload([W(w), ...tray.map(SN)]);
+    <button class="pic" id="pic" style="background:none;border:none;cursor:pointer" aria-label="Hear the word">${PICS[w] || "🔊"}</button>
+    <div class="boxes" id="boxes">${parts.map((p, i) => `<div class="box ${chunks ? "wide" : ""}" data-i="${i}"></div>`).join("")}</div>
+    <div class="tiles" id="tray">${tray.map((t, i) => `<button class="tile sm ${partClass(t)}" data-i="${i}">${esc(t.d)}</button>`).join("")}</div>
+    <div class="row"><button class="btn" id="hear">🔊 Hear the word</button><button class="btn" id="hint">💡 Next ${chunks ? "chunk" : "sound"}</button><button class="btn" id="skip">Skip</button></div></section>`);
+  A.preload([W(w), ...tray.map(t => t.clip).filter(Boolean)]);
   const say = () => A.play(["p_build", W(w)], 150);
   say(); $("#hear").onclick = () => A.play(W(w)); $("#pic").onclick = () => A.play(W(w));
   $("#skip").onclick = () => SCREENS.build();
   let pos = 0, miss = 0;
   const boxes = [...app.querySelectorAll(".box")];
-  $("#hint").onclick = () => { miss++; A.play(SN(parts[pos])); };
+  $("#hint").onclick = () => { miss++; A.play(parts[pos].clip || "p_silent"); };
   app.querySelectorAll("#tray .tile").forEach(b => b.onclick = async () => {
-    const t = b.dataset.t;
-    if (t === parts[pos]) {
-      boxes[pos].textContent = t; boxes[pos].classList.add("filled", tileClass(t)); b.classList.add("used");
+    const t = tray[+b.dataset.i];
+    if (t.d === parts[pos].d) {
+      boxes[pos].textContent = t.d; boxes[pos].classList.add("filled", partClass(parts[pos])); b.classList.add("used");
       pos++;
       if (pos === parts.length) {
         St.grade(k, miss <= 1, "build");
-        boxes.forEach(x => x.classList.add("on")); await A.play(parts.map(SN), 250, i => boxes.forEach((x, j) => x.style.transform = j === i ? "translateY(-6px)" : ""));
+        boxes.forEach(x => x.classList.add("on"));
+        const idx = parts.map((p, i) => p.clip ? i : -1).filter(i => i >= 0);
+        await A.play(idx.map(i => parts[i].clip), 250, j => boxes.forEach((x, i) => x.style.transform = i === idx[j] ? "translateY(-6px)" : ""));
         boxes.forEach(x => x.style.transform = "");
         await award(miss <= 1 ? 3 : 2, [W(w), cheer()]); await wait(300); SCREENS.build();
-      } else A.play(SN(t));
+      } else if (t.clip) A.play(t.clip);
     } else {
       miss++; b.classList.remove("wiggle"); void b.offsetWidth; b.classList.add("wiggle");
-      await A.play([SN(t), "p_notquite"], 150);
+      await A.play([t.clip, "p_notquite"].filter(Boolean), 150);
     }
   });
 };
@@ -373,8 +429,9 @@ SCREENS.build = () => {
 // ---------- READ & MATCH ----------
 SCREENS.match = () => {
   const l = level(), list = levelWords(l).filter(([w]) => PICS[w]);
+  if (!list.length) return go("home");
   const k = St.pick(list.map(([w]) => "match:" + w), { ordered: false });
-  const w = k.slice(6), parts = D.tiles(w);
+  const w = k.slice(6), parts = wordParts(l, w);
   const all = Object.keys(PICS).filter(x => x !== w && PICS[x] !== PICS[w]);
   // distractors that look alike (same first or last letter) make it real reading, not guessing
   const alike = St.shuffle(all.filter(x => x[0] === w[0] || x.slice(-1) === w.slice(-1) || x.length === w.length));
@@ -382,13 +439,13 @@ SCREENS.match = () => {
   const opts = St.shuffle([w, ...ds]);
   shell("Read & Match", `<section class="card">
     <p class="prompt">Read the word. Which picture is it?</p>
-    <div class="tiles" id="tiles">${tilesHTML(parts, "sm")}</div>
+    <div class="tiles" id="tiles">${partsHTML(parts, "sm")}</div>
     <div class="choices">${opts.map(x => `<button class="choice" data-w="${x}" aria-label="picture">${PICS[x]}</button>`).join("")}</div>
     <div class="row"><button class="btn" id="help">👣 Help me sound it out</button><button class="btn" id="skip">Skip</button></div></section>`);
   const tiles = [...app.querySelectorAll("#tiles .tile")];
-  tiles.forEach(t => t.onclick = async () => { lit(t, true); await A.play(SN(parts[+t.dataset.i])); lit(t, false); });
+  tiles.forEach(t => t.onclick = async () => { lit(t, true); await A.play(parts[+t.dataset.i].clip || "p_silent"); lit(t, false); });
   let helped = false, miss = 0;
-  $("#help").onclick = async () => { helped = true; await A.play(parts.map(SN), 420, i => tiles.forEach((t, j) => lit(t, j === i))); tiles.forEach(t => lit(t, false)); };
+  $("#help").onclick = async () => { helped = true; await playParts(parts, tiles); tiles.forEach(t => lit(t, false)); };
   $("#skip").onclick = () => SCREENS.match();
   app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
     if (b.dataset.w === w) {
@@ -400,7 +457,8 @@ SCREENS.match = () => {
 
 // ---------- TRICKY WORDS ----------
 SCREENS.tricky = () => {
-  const k = St.pick(D.TRICKY.map(w => "tricky:" + w), { maxNew: 2 });
+  const list = level().tricky; if (!list.length) return go("home");
+  const k = St.pick(list.map(w => "tricky:" + w), { maxNew: 2 });
   const w = k.slice(7);
   shell("Tricky Words", `<section class="card">
     <p class="prompt">Tricky word! You can't sound this one out. Do you know it?</p>
@@ -415,34 +473,61 @@ SCREENS.tricky = () => {
   $("#skip").onclick = () => SCREENS.tricky();
 };
 
+// ---------- WORD MEANING (3rd to 5th grade vocabulary) ----------
+SCREENS.vocab = () => {
+  const list = level().vocab; if (!list.length) return go("home");
+  const k = St.pick(list.map(([w]) => "vocab:" + w), { ordered: false });
+  const w = k.slice(6), [, def] = list.find(([x]) => x === w);
+  const opts = St.shuffle([[w, def], ...St.sample(list.filter(([x]) => x !== w), 2)]);
+  shell("Word Meaning", `<section class="card">
+    <p class="prompt">Read the word. What does it mean?</p>
+    <button class="tile word" id="t">${esc(w)}</button>
+    <div class="defs">${opts.map(([x, d]) => `<div class="def"><button class="choice text" data-w="${esc(x)}">${esc(d)}</button><button class="say" data-say="${esc(x)}" aria-label="Hear this meaning">🔊</button></div>`).join("")}</div>
+    <div class="row"><button class="btn" id="hear">🔊 Hear the word</button><button class="btn" id="skip">Skip</button></div></section>`);
+  const t = $("#t"), hearWord = async () => { lit(t, true); await A.play(W(w)); lit(t, false); };
+  t.onclick = hearWord; $("#hear").onclick = hearWord;
+  A.play(["p_meaning"]);
+  $("#skip").onclick = () => SCREENS.vocab();
+  app.querySelectorAll(".say").forEach(b => b.onclick = () => A.play("d_" + D.slug(b.dataset.say)));
+  let miss = 0;
+  app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
+    if (b.dataset.w === w) {
+      b.classList.add("good"); St.grade(k, !miss, "vocab");
+      await award(miss ? 1 : 2, [W(w), "d_" + D.slug(w), cheer()]); SCREENS.vocab();
+    } else { miss++; b.classList.add("bad"); await A.play("p_notquite"); }
+  });
+};
+
 // ---------- STORYBOOK ----------
+const answerClip = (st, i) => /^[a-z]+$/i.test(st.q[1][i][0]) ? W(st.q[1][i][0]) : `ans_${st.id}_${i}`;
 SCREENS.stories = () => {
-  const S = St.S, order = { pink: 0, blue: 1, green: 2 };
-  const books = D.STORIES.slice().sort((a, b) => order[a.level] - order[b.level]);
+  const S = St.S;
+  const books = D.STORIES.slice().sort((a, b) => gradeIndex(a.level) - gradeIndex(b.level));
   shell("Storybook", `
     <div class="panel"><p>Read the story to yourself. Tap any word you get stuck on to hear it. Words underlined in yellow are tricky words.</p></div>
     <div class="shelf">${books.map(b => {
-      const lv = D.LEVELS.find(l => l.id === b.level), read = S.stories[b.id];
-      const locked = !S.unlocked.includes(b.level);
-      return `<button class="book ${b.level}" data-id="${b.id}"><span class="cv">${b.cover}</span><b>${esc(b.title)}</b>
-        <small>${locked ? "🔒 " : ""}${lv.name}${read ? ` · read ${read.times}×` : ""}</small></button>`;
+      const g = GRADE(b.level), read = S.stories[b.id];
+      const locked = !St.isOpen("reading", b.level);
+      return `<button class="book" style="border-left-color:${g.color}" data-id="${b.id}"><span class="cv">${b.cover}</span><b>${esc(b.title)}</b>
+        <small>${locked ? "🔒 " : ""}${g.label} · ${g.planet}${read ? ` · read ${read.times}×` : ""}</small></button>`;
     }).join("")}</div>`);
   app.querySelectorAll(".book").forEach(b => b.onclick = () => {
     const st = D.STORIES.find(s => s.id === b.dataset.id);
-    if (!S.unlocked.includes(st.level)) { toast("This story is on a planet you haven't reached yet.", 3000); return; }
+    if (!St.isOpen("reading", st.level)) { toast("This story is on a planet you haven't reached yet.", 3000); return; }
     go("story", st.id);
   });
 };
 SCREENS.story = (id) => {
   const st = D.STORIES.find(s => s.id === id); if (!st) return go("stories");
   let page = 0, helpWords = new Set();
+  const long = gradeIndex(st.level) >= 4;
   const draw = () => {
     if (page >= st.pages.length) return question();
     const [text, ill] = st.pages[page];
     const words = text.split(/\s+/);
     shell(esc(st.title), `<section class="card">
       <div class="illus" aria-hidden="true">${ill}</div>
-      <div class="page" id="pg">${words.map((tok, i) => {
+      <div class="page ${long ? "long" : ""}" id="pg">${words.map((tok, i) => {
         const clean = tok.replace(/[^A-Za-z']/g, "");
         return `<button data-w="${esc(clean)}" class="${TRICKY_SET.has(clean.toLowerCase()) ? "tricky" : ""}">${esc(tok)}</button>`;
       }).join("")}</div>
@@ -463,25 +548,146 @@ SCREENS.story = (id) => {
     $("#next").onclick = async () => { St.touch(); if (page < st.pages.length - 1) await award(1, "p_nice"); page++; draw(); };
   };
   const question = () => {
-    const [q, answers] = st.q, opts = St.shuffle(answers);
+    const [q, answers] = st.q, opts = St.shuffle(answers.map((a, i) => [...a, i]));
+    const text = answers.some(([a]) => a.includes(" "));
     shell(esc(st.title), `<section class="card">
       <p class="prompt big">${esc(q)}</p>
-      <div class="choices">${opts.map(([w, p]) => `<button class="choice" data-w="${w}" aria-label="${w}">${p}</button>`).join("")}</div>
+      <div class="${text ? "defs" : "choices"}">${opts.map(([w, p, i]) => text
+        ? `<button class="choice text" data-i="${i}"><span class="emo">${p}</span> ${esc(w)}</button>`
+        : `<button class="choice" data-i="${i}" aria-label="${esc(w)}">${p}</button>`).join("")}</div>
       <div class="row"><button class="btn" id="hear">🔊 Hear the question</button></div></section>`);
     A.play("q_" + st.id); $("#hear").onclick = () => A.play("q_" + st.id);
     app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-      if (b.dataset.w === answers[0][0]) {
+      const i = +b.dataset.i;
+      if (i === 0) {
         b.classList.add("good");
-        // words he needed help with come back sooner in practice
-        helpWords.forEach(w => { if (levelWords(D.LEVELS.find(l => l.id === st.level)).some(([x]) => x === w)) St.grade("word:" + w, false); });
+        // words they needed help with come back sooner in practice
+        const lw = levelWords(D.READING[st.level]);
+        helpWords.forEach(w => { if (lw.some(([x]) => x === w)) St.grade("word:" + w, false); });
         St.storyRead(st.id); St.today().acts.stories = (St.today().acts.stories || 0) + 1;
-        confetti(120); await award(5, [W(b.dataset.w), "p_finished"]);
+        confetti(120); await award(5, [answerClip(st, 0), "p_finished"]);
         go("stories");
-      } else { b.classList.add("bad"); await A.play(["p_thats", W(b.dataset.w), "p_notquite"], 150); }
+      } else { b.classList.add("bad"); await A.play(["p_thats", answerClip(st, i), "p_notquite"], 150); }
     });
   };
   draw();
 };
+
+// ---------- MATH ----------
+const mathGrade = () => St.S.grade.math;
+const skillEntry = id => M.GRADE_SKILLS[mathGrade()].find(e => e[0] === id);
+SCREENS.math = (id) => {
+  const g = mathGrade(), sk = M.SK[id], entry = skillEntry(id);
+  if (!sk || !entry) return go("home");
+  St.setSubject("math");
+  if (id === "numcards") return numberCards(g);
+  if (id === "tracenum") return traceNumber(g);
+  const keys = sk.keys ? sk.keys(g) : null;
+  const key = keys ? St.pick(keys, { maxNew: 4 }) : `m:${id}:${g}`;
+  const p = sk.gen(g, keys ? key : null);
+  shell(entry[2] || sk.name, `<section class="card math">
+    <p class="prompt big">${p.q}</p>
+    ${p.vis ? `<div class="mvis">${p.vis}</div>` : ""}
+    ${p.choices ? `<div class="mchoices ${p.wide ? "wide" : ""}">${p.choices.map((c, i) => `<button class="mchoice" data-i="${i}">${c.html}</button>`).join("")}</div>`
+      : `<div class="pad"><output class="padout" id="out" aria-live="polite"></output><div class="keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9, p.pad.dec ? "." : "", 0, "⌫"].map(k => k === "" ? "<span></span>" : `<button class="key" data-k="${k}">${k}</button>`).join("")}</div>
+        <button class="btn yes big" id="check">Check ✓</button></div>`}
+    <div class="row"><button class="btn" id="hear">🔊 Hear it</button><button class="btn" id="skip">Skip</button></div></section>`);
+  const ask = () => A.play(p.say, 90);
+  ask(); $("#hear").onclick = ask; $("#skip").onclick = () => SCREENS.math(id);
+  let miss = 0, busy = false;
+  const right = async () => {
+    busy = true; const first = miss === 0;
+    St.grade(key, first, "math"); if (first) St.mathRight(g);
+    await award(first ? 2 : 1, [...(p.after || []), cheer()].filter(Boolean)); await wait(250); SCREENS.math(id);
+  };
+  // after two misses, show the answer and move on: no stars lost, and it comes back sooner
+  const reveal = async () => {
+    busy = true; St.grade(key, false, "math");
+    const row = document.createElement("div"); row.className = "reveal";
+    row.innerHTML = `<p>The answer is <b>${p.choices ? p.choices.find(c => c.v === p.ans).html : esc(p.ans)}</b></p><button class="btn yes big" id="nextq">Next →</button>`;
+    app.querySelector(".card").appendChild(row);
+    $("#nextq").onclick = () => SCREENS.math(id);
+    await A.play(["p_answeris", ...(p.after || M.N(+p.ans))], 90);
+  };
+  if (p.choices) {
+    app.querySelectorAll(".mchoice").forEach(b => b.onclick = async () => {
+      if (busy || b.classList.contains("bad")) return;
+      const c = p.choices[+b.dataset.i];
+      if (c.v === p.ans) { b.classList.add("good"); right(); }
+      else { miss++; b.classList.add("bad"); if (miss >= 2 && p.choices.length > 2) { app.querySelectorAll(".mchoice").forEach((x, i) => p.choices[i].v === p.ans && x.classList.add("good")); reveal(); }
+        else await A.play([...(c.say || []), "p_notquite"], 120); }
+    });
+  } else {
+    const out = $("#out"); let val = "";
+    const show = () => { out.textContent = val; out.classList.remove("bad"); };
+    const press = k => {
+      if (busy) return;
+      if (k === "⌫") val = val.slice(0, -1);
+      else if (k === "." ) { if (p.pad.dec && !val.includes(".")) val = (val || "0") + "."; }
+      else if (val.length < 9) val = val === "0" ? String(k) : val + k;
+      show();
+    };
+    const check = async () => {
+      if (busy || !val || val === ".") return;
+      if (Math.abs(parseFloat(val) - parseFloat(p.ans)) < 1e-9) { out.classList.add("good"); right(); return; }
+      miss++; out.classList.add("bad");
+      if (miss >= 2) { val = ""; reveal(); return; }
+      await A.play("p_notquite");
+      val = ""; show();
+    };
+    app.querySelectorAll(".key").forEach(b => b.onclick = () => press(b.dataset.k));
+    $("#check").onclick = check;
+    document.onkeydown = e => {
+      if (/^[0-9]$/.test(e.key)) press(e.key); else if (e.key === "." && p.pad.dec) press(".");
+      else if (e.key === "Backspace") press("⌫"); else if (e.key === "Enter") check(); else return;
+      e.preventDefault();
+    };
+  }
+};
+
+// Number cards: the Montessori three-period lesson with numerals and quantities
+function numberCards(g) {
+  const keys = M.SK.numcards.keys(g), k = St.pick(keys), n = +k.split(":")[2], it = St.item(k);
+  const period = !it.seen ? 1 : (it.box >= 2 ? (Math.random() < .65 ? 3 : 2) : (Math.random() < .6 ? 2 : 3));
+  const pool = keys.map(x => +x.split(":")[2]), e = M.EMOJI[n % M.EMOJI.length];
+  shell("Number Cards", `<section class="card" id="card"></section>`);
+  const card = $("#card"), next = () => numberCards(g), say = () => A.play("n_" + n);
+  if (period === 1) {
+    card.innerHTML = `${dotsHTML(1)}<p class="prompt">New number! Listen, then say it.</p>
+      <button class="tile num" id="t">${n}</button>${n ? M.objs(n, e) : `<p class="prompt">zero means none at all</p>`}
+      <button class="btn yes big" id="next">I said it! Next step →</button>`;
+    $("#t").onclick = say; A.play(["p_thisis", "n_" + n], 150);
+    $("#next").onclick = async () => { St.grade(k, true, "math"); St.mathRight(g); await award(1); p2(true); };
+  } else if (period === 2) p2(false); else p3();
+  function p2(fromP1) {
+    const opts = St.shuffle([n, ...St.sample(pool.filter(x => x !== n), 2)]);
+    card.innerHTML = `${dotsHTML(2)}<p class="prompt big">Show me…</p><div class="row"><button class="btn" id="again">🔊 Hear it again</button></div>
+      <div class="choices">${opts.map(o => `<button class="choice letter" data-n="${o}">${o}</button>`).join("")}</div>`;
+    const ask = () => A.play(["p_showme", "n_" + n], 150);
+    $("#again").onclick = ask; ask();
+    let miss = 0;
+    card.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
+      if (+b.dataset.n === n) { b.classList.add("good"); St.grade(k, !miss, "math"); if (!miss) St.mathRight(g); await award(miss ? 1 : 2, ["n_" + n, cheer()]); fromP1 ? p3() : next(); }
+      else { miss++; b.classList.add("bad"); await A.play(["n_" + b.dataset.n, "p_notquite"], 200); ask(); }
+    });
+  }
+  function p3() {
+    card.innerHTML = `${dotsHTML(3)}<p class="prompt big">What number is this?</p><button class="tile num" id="t">${n}</button>
+      <div class="grown"><p>Grown-up taps</p><div class="row">
+        <button class="btn yes big" id="ok">Said it! +1</button><button class="btn try" id="help">Help me</button><button class="btn" id="skip">Skip</button></div></div>`;
+    A.play("m_whatnum"); $("#t").onclick = say;
+    $("#ok").onclick = async () => { St.grade(k, true, "math"); St.mathRight(g); await award(1); next(); };
+    $("#help").onclick = () => { St.grade(k, false, "math"); A.play(["p_thisis", "n_" + n], 150); };
+    $("#skip").onclick = next;
+  }
+}
+// Sandpaper numerals
+function traceNumber(g) {
+  const k = St.pick(M.SK.tracenum.keys(g)), n = k.split(":")[2];
+  traceScreen({ title: "Trace Numbers", prompt: "Trace the number with your finger. Say its name as you trace.", disp: n, vowel: true,
+    kw: +n ? M.objs(+n, M.EMOJI[n % M.EMOJI.length]) : "", say: ["m_tracenum", "n_" + n], hear: ["n_" + n], clip: "n_" + n, skipLabel: "Next number",
+    done: async () => { St.grade(k, true, "math"); St.mathRight(g); await award(1, ["n_" + n, cheer()]); }, next: () => traceNumber(g) });
+}
 
 // ---------- PROGRESS + GROWN-UP CORNER ----------
 SCREENS.progress = () => {
@@ -501,16 +707,20 @@ SCREENS.progress = () => {
       ${v.stars ? `<text x="${bx + (bw - 8) / 2}" y="${y(v.stars) - 4}" text-anchor="middle" font-size="11" fill="#17203F" font-weight="700">${v.stars}</text>` : ""}
       <text x="${bx + (bw - 8) / 2}" y="${ch - 8}" text-anchor="middle" font-size="11" fill="${i === 13 ? "#17203F" : "#5A6688"}" font-weight="${i === 13 ? 700 : 400}">${"SMTWTFS"[x.getDay()]}</text>`; }).join("")}
   </svg>`;
-  const allSounds = [...D.PINK_SOUNDS, ...D.GREEN_SOUNDS];
+  const allSounds = [...D.PINK_SOUNDS, ...D.GREEN_SOUNDS, ...D.LONG_SOUNDS];
   const seenBox = k => (S.items[k] && S.items[k].seen ? S.items[k].box : -1);
   const cls = s => { const b = Math.max(seenBox("snd:" + s), seenBox("trace:" + s), seenBox("spy:" + soundGroup(s))); return b >= St.MASTERED ? "m" : b >= 1 ? "l2" : b >= 0 ? "l1" : ""; };
-  const lvRows = D.LEVELS.map(l => { const ws = levelWords(l), m = ws.filter(([w]) => wordKnown(w)).length;
-    const col = { pink: "var(--pink)", blue: "var(--blue)", green: "var(--green)" }[l.id];
-    return `<div class="lvrow"><span>${l.name}</span><div class="meter"><i style="width:${m / ws.length * 100}%;background:${col}"></i></div><span>${m}/${ws.length}</span></div>`; }).join("");
+  const meter = (name, n, of, col) => `<div class="lvrow"><span>${name}</span><div class="meter"><i style="width:${Math.min(1, n / of) * 100}%;background:${col}"></i></div><span>${n}/${of}</span></div>`;
+  const lvRows = D.GRADES.filter(g => g.id !== "prek").map(g => { const l = D.READING[g.id], ws = [...levelWords(l).map(x => x[0]), ...l.vocab.map(v => v[0])];
+    return meter(`${g.label} · ${g.planet}`, ws.filter(wordKnown).length, ws.length, g.color); }).join("");
+  const mathRows = D.GRADES.filter(g => St.isOpen("math", g.id)).map(g => meter(`${g.label} · ${g.planet}`, S.mathRight[g.id] || 0, MATH_UNLOCK, g.color)).join("");
+  const facts = Object.keys(S.items).filter(k => /^m:(add|sub|mul|div):/.test(k));
   const tricky = D.TRICKY.filter(w => St.mastered("tricky:" + w));
-  const weak = Object.entries(S.items).filter(([, v]) => v.seen >= 3 && v.right / v.seen < .6).sort((a, b) => a[1].right / a[1].seen - b[1].right / b[1].seen).slice(0, 10)
-    .map(([k]) => k.split(":")[1]);
+  const weakOf = math => Object.entries(S.items).filter(([k, v]) => k.startsWith("m:") === math && v.seen >= 3 && v.right / v.seen < .6)
+    .sort((a, b) => a[1].right / a[1].seen - b[1].right / b[1].seen).slice(0, 10).map(([k]) => math ? M.label(k) : k.split(":")[1]);
+  const weak = weakOf(false), weakMath = weakOf(true);
   const storyList = D.STORIES.filter(s => S.stories[s.id]).map(s => `<span class="chip">📖 ${esc(s.title)} · ${S.stories[s.id].times}×</span>`).join("") || `<p>No stories finished yet.</p>`;
+  const holdRow = sub => D.GRADES.filter(g => !St.isOpen(sub, g.id)).map(g => `<button class="btn hold" data-hold="${sub}:${g.id}">${g.label}</button>`).join("") || `<p>All grades open.</p>`;
   shell("Progress", `
     <div class="panel"><h3>Today</h3>
       <div class="stats">
@@ -519,40 +729,54 @@ SCREENS.progress = () => {
         <div class="stat"><b>${d.tries ? Math.round(d.right / d.tries * 100) + "%" : "–"}</b><small>right first time</small></div>
         <div class="stat"><b>${St.streak()}</b><small>day streak</small></div>
       </div>
-      <p>This week: ${weekStars} stars in ${weekMin} ${weekMin === 1 ? "minute" : "minutes"}. Goal is ${St.GOAL} stars a day (green bars).</p>
+      <p>Today: ${d.sub.reading} reading stars and ${d.sub.math} math stars. This week: ${weekStars} stars in ${weekMin} ${weekMin === 1 ? "minute" : "minutes"}. Goal is ${St.GOAL} stars a day (green bars).</p>
       ${chart}</div>
-    <div class="panel"><h3>Letter sounds</h3>
+    <div class="panel"><h3>📖 Letter sounds</h3>
       <div class="soundgrid">${allSounds.map(s => `<div class="sg ${cls(s)}">${D.SOUNDS[s][0]}</div>`).join("")}</div>
       <div class="legend"><span style="--c:#F1F4FB">Not tried</span><span style="--c:#FFF1C9">Started</span><span style="--c:#FFE08A">Learning</span><span style="--c:#CFF2DC">Knows it</span></div></div>
-    <div class="panel"><h3>Words he can read</h3>${lvRows}
+    <div class="panel"><h3>📖 Words he can read</h3>${lvRows}
       <p>Tricky words known: ${tricky.length}/${D.TRICKY.length}${tricky.length ? " · " + tricky.map(esc).join(", ") : ""}</p></div>
-    <div class="panel"><h3>Stories read</h3><div class="chips">${storyList}</div></div>
-    ${weak.length ? `<div class="panel"><h3>Needs more practice</h3><p>These come up more often until he gets them.</p><div class="chips">${weak.map(w => `<span class="chip">${esc(w)}</span>`).join("")}</div></div>` : ""}
+    <div class="panel"><h3>📖 Stories read</h3><div class="chips">${storyList}</div></div>
+    <div class="panel"><h3>🔢 Math</h3><p>Answers right on the first try, per grade. ${MATH_UNLOCK} opens the next planet.</p>${mathRows}
+      <p>Math facts mastered: ${facts.filter(k => St.mastered(k)).length} of ${facts.length} practiced.</p></div>
+    ${weak.length || weakMath.length ? `<div class="panel"><h3>Needs more practice</h3><p>These come up more often until he gets them.</p>
+      ${weak.length ? `<div class="chips">${weak.map(w => `<span class="chip">📖 ${esc(w)}</span>`).join("")}</div>` : ""}
+      ${weakMath.length ? `<div class="chips">${weakMath.map(w => `<span class="chip">🔢 ${esc(w)}</span>`).join("")}</div>` : ""}</div>` : ""}
     <div class="panel"><h3>Grown-up corner</h3>
       <ul class="tips">
-        <li><b>Short and often:</b> 10 minutes a day beats an hour on Saturday. The daily goal is ${St.GOAL} stars.</li>
+        <li><b>Short and often:</b> 10 minutes a day beats an hour on Saturday. The daily goal is ${St.GOAL} stars, from reading and math together.</li>
+        <li><b>Planets are grades:</b> Moon is Pre-K, Mars K, Jupiter 1st, Saturn 2nd, Uranus 3rd, Neptune 4th and Pluto 5th grade, for both reading and math.</li>
+        <li><b>Reading:</b> letter sounds (Pre-K), 3-letter words (K), blends and sh ch th (1st), long vowels and bossy r (2nd), then syllables, prefixes, suffixes and roots with word meanings and longer stories (3rd to 5th).</li>
+        <li><b>Math:</b> counting, shapes and patterns (Pre-K), adding within 10 (K), facts to 20 and tens and ones (1st), 2-digit numbers, money and time (2nd), times tables and fractions (3rd), multi-digit work and decimals (4th), fraction and decimal operations (5th).</li>
         <li><b>Sounds, not letter names:</b> say "mmm," not "em." Stop sounds are short: "b," not "buh."</li>
-        <li><b>Three steps (Montessori):</b> Sound Cards teach "This is…", then "Show me…", then "What is this?"</li>
-        <li><b>Colours:</b> vowels are blue and consonants red, like the Montessori movable alphabet.</li>
-        <li><b>Let him fix mistakes:</b> wrong taps play their own sound so he can hear the difference. Misses never take stars away.</li>
-        <li><b>Planets:</b> Moon is 3-letter words, Mars is 4–5 letter words with blends, Saturn is sh, ch, th, ck, ee, oo, ng. Mars opens after 20 Moon words, Saturn after 15 Mars words.</li>
+        <li><b>Three steps (Montessori):</b> Sound Cards and Number Cards teach "This is…", then "Show me…", then "What is this?"</li>
+        <li><b>Colours:</b> vowels are blue and consonants red, like the Montessori movable alphabet. Silent letters are grey.</li>
+        <li><b>Mistakes are fine:</b> wrong taps play their own sound so he can hear the difference. After two misses in math the answer is shown. Misses never take stars away.</li>
+        <li><b>Unlocking:</b> a reading planet opens when enough words on the one before are known; a math planet opens after ${MATH_UNLOCK} first-try answers. Starting higher? Unlock a grade below.</li>
         <li>Progress is saved on this device. On an iPad, tap Share → Add to Home Screen to open it like an app.</li>
       </ul>
-      <p>Hold a button for 2 seconds to use it.</p>
-      <div class="row">${D.LEVELS.filter(l => !S.unlocked.includes(l.id)).map(l => `<button class="btn hold" data-hold="unlock:${l.id}">Unlock ${l.name}</button>`).join("")}
-        <button class="btn try hold" data-hold="reset">Reset progress</button></div></div>`);
+      <p>Hold a button for 2 seconds to use it. Unlocking a grade opens the grades before it too.</p>
+      <p><b>Unlock reading</b></p><div class="row">${holdRow("reading")}</div>
+      <p><b>Unlock math</b></p><div class="row">${holdRow("math")}</div>
+      <div class="row"><button class="btn try hold" data-hold="reset">Reset progress</button></div></div>`);
   app.querySelectorAll("[data-hold]").forEach(b => {
     let t0 = 0, raf = 0;
     const tick = () => { const p = Math.min(1, (Date.now() - t0) / 2000); b.style.setProperty("--p", p); if (p >= 1) { done(); return; } raf = requestAnimationFrame(tick); };
     const done = () => {
-      cancelAnimationFrame(raf); t0 = 0; const [act, l] = b.dataset.hold.split(":");
-      if (act === "unlock") { St.unlock(l); toast("Unlocked!"); } else { St.reset(); toast("Progress reset"); }
+      cancelAnimationFrame(raf); t0 = 0; const [sub, gid] = b.dataset.hold.split(":");
+      if (sub === "reset") { St.reset(); toast("Progress reset"); }
+      else { D.GRADES.slice(0, gradeIndex(gid) + 1).forEach(g => St.unlock(sub, g.id)); St.setLevel(sub, gid); toast("Unlocked!"); }
       SCREENS.progress();
     };
     b.onpointerdown = () => { t0 = Date.now(); raf = requestAnimationFrame(tick); };
     b.onpointerup = b.onpointerleave = b.onpointercancel = () => { cancelAnimationFrame(raf); b.style.setProperty("--p", 0); };
   });
 };
+
+// reading screens set the subject so stars and praise go to the right place
+["sounds", "trace", "ispy", "blend", "build", "match", "tricky", "vocab", "stories", "story"].forEach(n => {
+  const f = SCREENS[n]; SCREENS[n] = arg => { St.setSubject("reading"); return f(arg); };
+});
 
 route();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});

@@ -5,10 +5,12 @@ overridden, so held sounds like "mmm" and "sss" are spoken by the voice itself
 (no looping or time-stretching). Stop sounds (b, d, t...) are clipped short
 with only a trace of vowel, the way phonics teachers say them.
 
-Usage: python3 tools/build_audio.py /path/to/voice_dir
+Usage: python3 tools/build_audio.py /path/to/voice_dir [section ...] [--force]
   voice_dir holds en-us-lessac-medium.onnx plus durA.onnx/durB.onnx (see make_models()).
+  Sections: sounds long words stretched chunks sentences phrases defs math (default: all).
+  Clips that already exist are kept; --force rebuilds them too.
 """
-import json, os, subprocess, sys, wave
+import json, os, shutil, subprocess, sys, wave
 import numpy as np, onnx, onnxruntime as ort
 from piper import PiperVoice
 from piper.config import SynthesisConfig
@@ -152,27 +154,60 @@ def build_sounds():
     return S
 
 # ---------- words, sentences, prompts ----------
+def to_sr(x):
+    # the medium voice speaks at 22050 Hz; clips are 16000 Hz
+    vr = V.config.sample_rate
+    if vr == SR: return x
+    return np.interp(np.linspace(0, len(x) - 1, int(len(x) * SR / vr)), np.arange(len(x)), x)
+
 def say(text, ls=1.0, phonemes=None):
     if phonemes:
-        return fade(trim(synth_ph(phonemes, ls=ls, ns=0.5, nw=0.6)), 5, 40)
+        return fade(trim(to_sr(synth_ph(phonemes, ls=ls, ns=0.5, nw=0.6))), 5, 40)
     cfg = SynthesisConfig(length_scale=ls, noise_scale=0.5, noise_w_scale=0.6)
     x = np.concatenate([c.audio_float_array for c in V.synthesize(text, cfg)])
-    return fade(trim(x), 5, 40)
+    return fade(trim(to_sr(x)), 5, 40)
+
+# 2nd grade sounds: long vowels say their names; er/ir/ur share the r sound (/er/)
+LONG = {"ay": ["ˈ", "e", "ɪ"], "igh": ["ˈ", "a", "ɪ"], "oa": ["ˈ", "o", "ʊ"], "ue": ["j", "ˈ", "u", "ː"],
+        "ar": ["ˈ", "ɑ", "ː", "ɹ"], "or": ["ˈ", "ɔ", "ː", "ɹ"]}
+def build_long():
+    for k, ph in LONG.items():
+        if want("s_" + k): save("s_" + k, say("", 1.5, ph))
+    if want("s_er"): shutil.copy(os.path.join(OUT, "s_r.mp3"), os.path.join(OUT, "s_er.mp3"))
+
+FORCE = "--force" in sys.argv
+def want(name):
+    return FORCE or not os.path.exists(os.path.join(OUT, name + ".mp3"))
 
 def main():
     C = json.load(open(os.path.join(ROOT, "tools", "clips.json")))
-    only = set(sys.argv[2:])
-    if not only or "sounds" in only: build_sounds()
-    if not only or "words" in only:
+    only = set(a for a in sys.argv[2:] if not a.startswith("--"))
+    run = lambda sec: not only or sec in only
+    if run("sounds") and (FORCE or want("s_m")): build_sounds()
+    if run("long"): build_long()
+    if run("words"):
         for k, w in C["words"].items():
+            if not want(k): continue
             if w == "a": save(k, say("", 1.1, ["ˈ", "ʌ"]))
             else: save(k, say(w, 1.1))
-    if not only or "stretched" in only:
-        for k, w in C["stretched"].items(): save(k, say(w, 2.3))
-    if not only or "sentences" in only:
-        for k, t in C["sentences"].items(): save(k, say(t, 1.15))
-    if not only or "phrases" in only:
-        for k, t in C["phrases"].items(): save("p_" + k, say(t, 1.0))
+    if run("stretched"):
+        for k, w in C["stretched"].items():
+            if want(k): save(k, say(w, 2.3))
+    if run("chunks"):
+        for k, t in C.get("chunks", {}).items():
+            if want(k): save(k, say(t, 1.25))
+    if run("sentences"):
+        for k, t in C["sentences"].items():
+            if want(k): save(k, say(t, 1.15))
+    if run("phrases"):
+        for k, t in C["phrases"].items():
+            if want("p_" + k): save("p_" + k, say(t, 1.0))
+    if run("defs"):
+        for k, t in C.get("defs", {}).items():
+            if want(k): save(k, say(t, 1.1))
+    if run("math"):
+        for k, t in C.get("math", {}).items():
+            if want(k): save(k, say(t, 1.05 if k.startswith("m_") else 1.1))
 
 main()
 print("clips:", len(os.listdir(OUT)))

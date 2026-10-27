@@ -1,4 +1,5 @@
 // Progress, daily log and the practice scheduler. Saved in this browser (localStorage).
+// Reading and Math each have their own grade (prek, k, g1..g5) and unlocked grades; stars and the daily mission are shared.
 window.Store = (() => {
   const KEY = "soundRocket.v2";
   const GOAL = 20;                       // stars for a "mission complete" day
@@ -6,8 +7,16 @@ window.Store = (() => {
   const GAP = [30e3, 5 * 60e3, 20 * 3600e3, 2 * 864e5, 5 * 864e5, 12 * 864e5];
   const MASTERED = 3;
 
-  let S = { stars: 0, launches: 0, level: "pink", unlocked: ["pink"], items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {} };
+  const fresh = () => ({ subject: "reading", grade: { reading: "prek", math: "prek" }, open: { reading: ["prek"], math: ["prek"] }, mathRight: {} });
+  let S = { stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, ...fresh() };
   try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s) S = { ...S, ...s }; } catch (e) {}
+  // Before grade levels, reading had three planets: pink (3-letter words, now K), blue and green (now 1st grade)
+  if (Array.isArray(S.unlocked)) {
+    const map = { pink: "k", blue: "g1", green: "g1" };
+    S.open = { reading: ["prek", ...new Set(S.unlocked.map(l => map[l]).filter(Boolean))], math: ["prek"] };
+    S.grade = { reading: map[S.level] || "k", math: "prek" };
+    delete S.unlocked; delete S.level;
+  }
   // carry over stars from the first version of the game
   try { const old = JSON.parse(localStorage.getItem("soundRocket") || "null"); if (old && !S.migrated) { S.stars += old.pts || 0; S.launches += old.launches || 0; S.migrated = true; } } catch (e) {}
   let timer = null;
@@ -17,6 +26,7 @@ window.Store = (() => {
   function today() {
     const k = dayKey();
     if (!S.days[k]) S.days[k] = { stars: 0, secs: 0, right: 0, tries: 0, acts: {}, stories: [] };
+    if (!S.days[k].sub) S.days[k].sub = { reading: 0, math: 0 };
     return S.days[k];
   }
   // Count active minutes: time between taps, ignoring gaps over 90 seconds
@@ -69,9 +79,9 @@ window.Store = (() => {
   const sample = (a, n) => shuffle(a).slice(0, n);
 
   // Stars: returns {launch, goal} so the game can celebrate
-  function addStars(n) {
+  function addStars(n, subject = S.subject) {
     const before = Math.floor(S.stars / 20), d = today(), had = d.stars;
-    S.stars += n; d.stars += n;
+    S.stars += n; d.stars += n; d.sub[subject] = (d.sub[subject] || 0) + n;
     const launch = Math.floor(S.stars / 20) > before;
     if (launch) S.launches++;
     const goal = had < GOAL && d.stars >= GOAL;
@@ -88,9 +98,14 @@ window.Store = (() => {
     const d = today(); if (!d.stories.includes(id)) d.stories.push(id);
     const s = S.stories[id] || (S.stories[id] = { times: 0, first: dayKey() }); s.times++; s.last = dayKey(); save();
   }
-  function unlock(level) { if (!S.unlocked.includes(level)) { S.unlocked.push(level); save(); return true; } return false; }
-  function setLevel(l) { S.level = l; save(); }
-  function reset() { const keep = { level: "pink", unlocked: ["pink"], migrated: true }; S = { stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, ...keep }; save(); }
+  const isOpen = (subject, g) => S.open[subject].includes(g);
+  function unlock(subject, g) { if (!isOpen(subject, g)) { S.open[subject].push(g); save(); return true; } return false; }
+  function setLevel(subject, g) { S.grade[subject] = g; save(); }
+  function setSubject(s) { S.subject = s; save(); }
+  // first-try right answers in each math grade (opens the next math planet)
+  function mathRight(g) { S.mathRight[g] = (S.mathRight[g] || 0) + 1; save(); return S.mathRight[g]; }
+  function reset() { S = { stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, migrated: true, ...fresh() }; save(); }
 
-  return { get S() { return S; }, GOAL, MASTERED, dayKey, today, touch, item, grade, box, mastered, pick, shuffle, sample, addStars, streak, storyRead, unlock, setLevel, reset, save };
+  return { get S() { return S; }, GOAL, MASTERED, dayKey, today, touch, item, grade, box, mastered, pick, shuffle, sample, addStars, streak, storyRead,
+    isOpen, unlock, setLevel, setSubject, mathRight, reset, save };
 })();

@@ -1,31 +1,44 @@
 # Sound Rocket
 
-A phonics game for a beginning reader. Open it at **https://rgupta42-del.github.io/sound-rocket/** (on an iPad: Share → Add to Home Screen).
+A reading and math game from Pre-K to 5th grade. Open it at **https://rgupta42-del.github.io/sound-rocket/** (on an iPad: Share → Add to Home Screen).
 
 ## What's in it
-Three planets follow the Montessori reading series:
-- **Moon Base (pink):** letter sounds and 3-letter words (cat, pig, sun)
-- **Mars (blue):** 4- and 5-letter words with blends (frog, drum, plant). Opens after 20 Moon words.
-- **Saturn (green):** sh, ch, th, ck, ee, oo, ng (ship, duck, sheep, spoon). Opens after 15 Mars words.
+Reading and Math share seven planets, one per grade. Switch subjects with the 📖 Reading / 🔢 Math tabs on the home screen; each subject unlocks its planets separately, and stars, the rocket and the daily mission are shared.
 
-Activities:
+| Planet | Grade | Reading | Math |
+|---|---|---|---|
+| Moon | Pre-K | Letter sounds | Number cards 0–10, counting, more or less, shapes, patterns |
+| Mars | K | 3-letter words (cat, pig, sun) | Numbers to 20, add and take away within 10, make ten |
+| Jupiter | 1st | Blends and sh, ch, th, ck, ee, oo, ng | Facts within 20, tens and ones, greater/less, hour and half hour |
+| Saturn | 2nd | Long vowels (magic e, ai, oa, igh) and bossy r | 2-digit add/subtract, hundreds, skip counting, even/odd, coins, time to 5 min |
+| Uranus | 3rd | Syllables, compound words, endings | Times tables, division facts, fractions, rounding, area, 3-digit add/subtract |
+| Neptune | 4th | Prefixes and suffixes | Multi-digit multiply, remainders, equivalent fractions, decimals, place value, factors |
+| Pluto | 5th | Greek and Latin roots | Fraction and decimal operations, 2-digit multiply/divide, order of operations, volume |
+
+Reading planets open when enough words on the one before are known (Pre-K: 12 letter sounds; K and 1st: 20 words; then 15). Math planets open after 40 right-first-try answers. A grown-up can unlock any grade on the Progress page.
+
+Reading activities:
 - **Sound Cards:** Montessori three-period lesson: "This is…", "Show me…", "What is this?"
 - **Trace It:** sandpaper-letter tracing while saying the sound
 - **I Spy:** pick the picture that starts with a sound
-- **Blend It:** sound out a word tile by tile, with a grown-up checking
-- **Build a Word:** movable alphabet; wrong letters play their own sound (control of error)
+- **Blend It / Chunk It:** sound out a word tile by tile (or chunk by chunk from 3rd grade), with a grown-up checking
+- **Build a Word:** movable alphabet, or syllable tiles from 3rd grade; wrong tiles play their own sound (control of error)
 - **Read & Match:** read a word alone and pick its picture
-- **Tricky Words:** sight words that can't be sounded out
-- **Storybook:** seven decodable stories with tap-a-word help and a picture question at the end
+- **Tricky Words:** sight words by grade, Pre-K to 3rd
+- **Word Meaning:** read a word and pick its meaning (3rd to 5th)
+- **Storybook:** fifteen stories from decodable K stories to 5th-grade passages, with tap-a-word help and a question at the end
 
-Practice is chosen by spaced repetition: nothing repeats back-to-back, missed items come back sooner, mastered ones less often, and new letter sounds are introduced in Montessori order a couple at a time.
+Math activities include Number Cards (three-period lesson), Trace Numbers (sandpaper numerals), golden beads for place value, ten frames, clocks, coins, fraction pictures, area grids and a number pad. After two misses the answer is shown and the problem comes back sooner.
 
-The **Progress** page shows stars and minutes per day for two weeks, a daily goal of 20 stars, streaks, which letter sounds he knows, words mastered per planet, stories read, and items that need more practice. Progress is stored on the device (browser storage).
+Practice is chosen by spaced repetition: nothing repeats back-to-back, missed items come back sooner, mastered ones less often, and new items (letter sounds in Montessori order, math facts from easiest) come in a couple at a time.
+
+The **Progress** page shows stars and minutes per day for two weeks (split into reading and math), a daily goal of 20 stars, streaks, which letter sounds he knows, words mastered per grade, stories read, math progress per grade, and items that need more practice. Progress is stored on the device (browser storage); progress from the earlier three-planet version carries over (Moon Base words count as K, Mars and Saturn as 1st grade).
 
 ## Files
 - `index.html`, `css/style.css`, `js/*.js`: the game (no build step)
-- `js/data.js`: word lists, stories and prompts
-- `audio/`: recorded clips for every sound, word, sentence and prompt
-- `tools/`: scripts that rebuild the audio (`node tools/export_list.js`, then `python3 tools/build_audio.py <voice dir>`)
+- `js/data.js`: grades, word lists, stories and prompts for reading
+- `js/math.js`: math skills for each grade and the pictures they draw
+- `audio/`: recorded clips for every sound, word, sentence, number and prompt
+- `tools/`: scripts that rebuild the audio (`node tools/export_list.js`, then `python3 tools/build_audio.py <voice dir>`; only missing clips are built unless you pass `--force`)
 
-Voice: Piper TTS "lessac" voice. Held sounds (mmm, sss) are made by lengthening the sound inside the voice model, and stop sounds are clipped short (b, not buh).
+Voice: Piper TTS "lessac" voice. Held sounds (mmm, sss) are made by lengthening the sound inside the voice model, and stop sounds are clipped short (b, not buh). Numbers are joined from recorded parts (forty-seven, thousand, three, hundred…).
