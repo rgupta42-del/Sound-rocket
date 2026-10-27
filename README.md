@@ -1,6 +1,11 @@
 # Sound Rocket
 
-A reading and math game from Pre-K to 5th grade. Open it at **https://rgupta42-del.github.io/sound-rocket/** (on an iPad: Share → Add to Home Screen).
+A reading and math game from Pre-K to 5th grade. Open it at **https://rgupta42-del.github.io/Sound-rocket/** (on an iPhone or iPad: Share → Add to Home Screen).
+
+## For families
+Share the link with anyone. Each family's progress stays on their own phone or tablet; nothing is sent anywhere.
+- **A player per child:** the first visit asks for the child's name, a picture, and which grade to start reading and math at (any grade from Pre-K to 5th; earlier grades stay open for review). Add more children from the home screen and switch between them.
+- **Grown-up controls** (Progress page, per child, hold buttons for 2 seconds): move to any grade, open every planet, unlock a single lesson, rename, start over, remove, back up progress to a file and restore it on another device, and a sound check.
 
 ## What's in it
 Reading and Math share seven planets, one per grade. Switch subjects with the 📖 Reading / 🔢 Math tabs on the home screen; each subject unlocks its planets separately, and stars, the rocket and the daily mission are shared.
@@ -32,7 +37,7 @@ Math activities include Number Cards (three-period lesson), Trace Numbers (sandp
 
 Practice is chosen by spaced repetition: nothing repeats back-to-back, missed items come back sooner, mastered ones less often, and new items (letter sounds in Montessori order, math facts from easiest) come in a couple at a time.
 
-The **Progress** page shows stars and minutes per day for two weeks (split into reading and math), a daily goal of 20 stars, streaks, which letter sounds he knows, words mastered per grade, stories read, math progress per grade, and items that need more practice. Progress is stored on the device (browser storage); progress from the earlier three-planet version carries over (Moon Base words count as K, Mars and Saturn as 1st grade).
+The **Progress** page shows stars and minutes per day for two weeks (split into reading and math), a daily goal of 20 stars, streaks, which letter sounds he knows, words mastered per grade, stories read, math progress per grade, and items that need more practice. Progress is stored on the device (browser storage), separately for each child; progress from the earlier three-planet version carries over (Moon Base words count as K, Mars and Saturn as 1st grade).
 
 ## Files
 - `index.html`, `css/style.css`, `js/*.js`: the game (no build step)

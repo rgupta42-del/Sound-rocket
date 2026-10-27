@@ -39,6 +39,23 @@ button:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
 .rocket{width:38px;height:38px;flex:none;transition:transform 1.1s cubic-bezier(.55,-0.25,.6,1),opacity 1.1s}
 .rocket.launch{transform:translateY(-140px) rotate(-10deg);opacity:0}
 
+/* players */
+.kidchip{display:flex;align-items:center;gap:10px;background:var(--space2);border:none;border-radius:18px;padding:8px 14px;cursor:pointer;text-align:left}
+.kidchip span{font-size:1.8rem;line-height:1} .kidchip b{font-family:var(--display);font-size:1.15rem;flex:1} .kidchip small{color:#B9C6EE;font-family:var(--display)}
+.kidlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.kidcard{background:var(--card);color:var(--ink);border:4px solid transparent;border-radius:22px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;box-shadow:0 5px 0 #0b1330}
+.kidcard.on{border-color:var(--sun)} .kidcard .ava{font-size:3rem;line-height:1} .kidcard b{font-family:var(--display);font-size:1.2rem} .kidcard small{color:var(--muted)}
+.kidcard.add{background:transparent;color:#C5D1F5;border:2px dashed #3B4E8E;box-shadow:none}
+.setup input{font:inherit;background:#fff;font-size:1.2rem;padding:12px 14px;border-radius:14px;border:3px solid var(--line);color:var(--ink);-webkit-user-select:text;user-select:text}
+.setup input.bad{border-color:var(--cons)}
+.setup .levels{justify-content:flex-start}
+.setup .hint{font-size:.85rem}
+.avas{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.avas button{font-size:1.8rem;border:3px solid transparent;background:var(--card2);border-radius:14px;padding:6px 0;cursor:pointer}
+.avas button[aria-pressed="true"]{border-color:var(--sun);background:#FFF1C9}
+label.btn{display:inline-flex;align-items:center;justify-content:center}
+.setup .btn{align-self:center}
+
 /* home */
 .mission{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;background:var(--space2);border-radius:22px;padding:14px 16px}
 .ring{width:84px;height:84px}

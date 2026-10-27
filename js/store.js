@@ -1,27 +1,71 @@
 // Progress, daily log and the practice scheduler. Saved in this browser (localStorage).
-// Reading and Math each have their own grade (prek, k, g1..g5) and unlocked grades; stars and the daily mission are shared.
+// Each child on the device has a profile with their own progress. Reading and Math each have their own
+// grade (prek, k, g1..g5) and unlocked grades; stars and the daily mission are shared between them.
 window.Store = (() => {
-  const KEY = "soundRocket.v2";
+  const KEY = "soundRocket.v2";                 // progress from before profiles (kept as it was)
+  const PKEY = "soundRocket.profiles", kidKey = id => "soundRocket.kid." + id;
+  const GRADE_IDS = ["prek", "k", "g1", "g2", "g3", "g4", "g5"];
   const GOAL = 20;                       // stars for a "mission complete" day
   // Review gaps for each mastery box (Leitner-style spaced repetition)
   const GAP = [30e3, 5 * 60e3, 20 * 3600e3, 2 * 864e5, 5 * 864e5, 12 * 864e5];
   const MASTERED = 3;
 
   const fresh = () => ({ subject: "reading", grade: { reading: "prek", math: "prek" }, open: { reading: ["prek"], math: ["prek"] }, mathRight: {}, lessons: {} });
-  let S = { stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, ...fresh() };
-  try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s) S = { ...S, ...s }; } catch (e) {}
-  // Before grade levels, reading had three planets: pink (3-letter words, now K), blue and green (now 1st grade)
-  if (!S.lessons) S.lessons = {};
-  if (Array.isArray(S.unlocked)) {
-    const map = { pink: "k", blue: "g1", green: "g1" };
-    S.open = { reading: ["prek", ...new Set(S.unlocked.map(l => map[l]).filter(Boolean))], math: ["prek"] };
-    S.grade = { reading: map[S.level] || "k", math: "prek" };
-    delete S.unlocked; delete S.level;
+  const blank = () => ({ stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, migrated: true, ...fresh() });
+  const read = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  // bring older saved progress up to date
+  function upgrade(s) {
+    s = { ...blank(), migrated: false, ...s };
+    if (!s.lessons) s.lessons = {};
+    // Before grade levels, reading had three planets: pink (3-letter words, now K), blue and green (now 1st grade)
+    if (Array.isArray(s.unlocked)) {
+      const map = { pink: "k", blue: "g1", green: "g1" };
+      s.open = { reading: ["prek", ...new Set(s.unlocked.map(l => map[l]).filter(Boolean))], math: ["prek"] };
+      s.grade = { reading: map[s.level] || "k", math: "prek" };
+      delete s.unlocked; delete s.level;
+    }
+    // carry over stars from the first version of the game
+    const old = read("soundRocket"); if (old && !s.migrated) { s.stars += old.pts || 0; s.launches += old.launches || 0; }
+    s.migrated = true;
+    return s;
   }
-  // carry over stars from the first version of the game
-  try { const old = JSON.parse(localStorage.getItem("soundRocket") || "null"); if (old && !S.migrated) { S.stars += old.pts || 0; S.launches += old.launches || 0; S.migrated = true; } } catch (e) {}
+
+  // Profiles: { kids: [{id, name, ava}], cur: id }. Progress from before profiles becomes the first child.
+  let P = read(PKEY) || { kids: [], cur: null };
+  if (!P.kids.length && read(KEY)) { P = { kids: [{ id: "k1", name: "Player 1", ava: "🚀" }], cur: "k1" }; write(kidKey("k1"), upgrade(read(KEY))); write(PKEY, P); }
+  let S = blank();
+  if (P.cur && P.kids.some(k => k.id === P.cur)) S = upgrade(read(kidKey(P.cur)) || {}); else P.cur = null;
   let timer = null;
-  const save = () => { clearTimeout(timer); timer = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }, 150); };
+  const flush = () => { clearTimeout(timer); timer = null; if (P.cur) write(kidKey(P.cur), S); };
+  const save = () => { clearTimeout(timer); timer = setTimeout(flush, 150); };
+  addEventListener("pagehide", () => { if (timer) flush(); });
+
+  const kids = () => P.kids;
+  const kid = () => P.kids.find(k => k.id === P.cur) || null;
+  function switchKid(id) { if (timer) flush(); P.cur = id; write(PKEY, P); S = upgrade(read(kidKey(id)) || {}); }
+  // a new child starts at the grades a grown-up picked: those grades and everything before them are open
+  function addKid(name, ava, start) {
+    const id = "k" + Date.now().toString(36);
+    P.kids.push({ id, name, ava }); write(PKEY, P);
+    const s = blank();
+    for (const sub of ["reading", "math"]) { const g = start[sub] || "prek"; s.grade[sub] = g; s.open[sub] = GRADE_IDS.slice(0, GRADE_IDS.indexOf(g) + 1); }
+    write(kidKey(id), s); switchKid(id); return id;
+  }
+  function editKid(id, f) { Object.assign(P.kids.find(k => k.id === id), f); write(PKEY, P); }
+  function removeKid(id) {
+    P.kids = P.kids.filter(k => k.id !== id); try { localStorage.removeItem(kidKey(id)); } catch (e) {}
+    if (P.cur === id) { if (P.kids.length) switchKid(P.kids[0].id); else { P.cur = null; S = blank(); } }
+    write(PKEY, P);
+  }
+  // back up one child's progress to a file, and bring it back on another device
+  const exportKid = () => { flush(); return JSON.stringify({ app: "sound-rocket", kid: kid(), progress: S }); };
+  function importKid(text) {
+    const d = JSON.parse(text); if (d.app !== "sound-rocket" || !d.progress) throw new Error("not a Sound Rocket backup");
+    const id = "k" + Date.now().toString(36);
+    P.kids.push({ id, name: (d.kid && d.kid.name) || "Player", ava: (d.kid && d.kid.ava) || "🚀" }); write(PKEY, P);
+    write(kidKey(id), upgrade(d.progress)); switchKid(id); return id;
+  }
 
   const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   function today() {
@@ -109,8 +153,10 @@ window.Store = (() => {
   function setSubject(s) { S.subject = s; save(); }
   // first-try right answers in each math grade (opens the next math planet)
   function mathRight(g) { S.mathRight[g] = (S.mathRight[g] || 0) + 1; save(); return S.mathRight[g]; }
-  function reset() { S = { stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, migrated: true, ...fresh() }; save(); }
+  // start this child over, keeping the grades they're on
+  function reset() { const keep = { grade: S.grade, open: S.open, subject: S.subject }; S = { ...blank(), ...keep }; save(); }
 
   return { get S() { return S; }, GOAL, MASTERED, dayKey, today, touch, item, grade, box, mastered, pick, shuffle, sample, addStars, streak, storyRead,
-    isOpen, lessonOpen, anyLesson, setLesson, unlock, setLevel, setSubject, mathRight, reset, save };
+    isOpen, lessonOpen, anyLesson, setLesson, unlock, setLevel, setSubject, mathRight, reset, save,
+    kids, kid, switchKid, addKid, editKid, removeKid, exportKid, importKid };
 })();

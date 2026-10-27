@@ -123,6 +123,7 @@ function go(name, arg) { A.stop(); location.hash = name === "home" ? "" : name +
 function route() {
   A.stop(); document.onkeydown = null; navId++;
   const h = location.hash.slice(1), [name, ...rest] = h.split("-");
+  if (!St.kid() && name !== "newkid") return SCREENS.newkid();
   (SCREENS[name] || SCREENS.home)(rest.join("-"));
   window.scrollTo(0, 0);
 }
@@ -136,7 +137,7 @@ const ACTS = {
   ispy: ["🔭", "I Spy", "Find what starts with the sound", "Listening game"],
   blend: ["🧩", "Blend It", "Sound out words, then read them", "With a grown-up"],
   build: ["🛠️", "Build a Word", "Hear a word, build it with letters", "Movable alphabet"],
-  match: ["🖼️", "Read & Match", "Read the word, pick the picture", "Reads on his own"],
+  match: ["🖼️", "Read & Match", "Read the word, pick the picture", "Reads alone"],
   tricky: ["⭐", "Tricky Words", "Words you just know by sight", "With a grown-up"],
   vocab: ["💬", "Word Meaning", "Read a word, pick what it means", "Vocabulary"],
   stories: ["📖", "Storybook", "Read a little story yourself", "Stories and questions"]
@@ -164,6 +165,7 @@ SCREENS.home = () => {
     <text x="42" y="48" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="20" fill="#fff">${d.stars}</text></svg>`;
   const blurb = sub === "math" ? M.GRADE_SKILLS[cur.id].map(([, s]) => s).slice(0, 3).join(" · ") : level().blurb;
   shell("Sound Rocket", `
+    <button class="kidchip" id="kids"><span>${esc(St.kid().ava)}</span><b>${esc(St.kid().name)}</b><small>${St.kids().length > 1 ? "Switch player" : "Add a player"}</small></button>
     <div class="mission">${ring}<div><h2>${d.stars >= St.GOAL ? "Mission complete today!" : `Today's mission: ${St.GOAL} stars`}</h2>
       <p>${d.stars >= St.GOAL ? "Great work. Keep going for bonus stars!" : `${St.GOAL - d.stars} stars to go`} · ${streak} day streak 🔥</p></div></div>
     <div class="subjects" role="tablist" aria-label="Subject">
@@ -186,7 +188,55 @@ SCREENS.home = () => {
   app.querySelectorAll(".act[data-a]").forEach(b => b.onclick = () => b.classList.contains("locked") ? lockedMsg() : go(b.dataset.a));
   app.querySelectorAll(".act[data-m]").forEach(b => b.onclick = () => b.classList.contains("locked") ? lockedMsg() : go("math", b.dataset.m));
   $("#prog").onclick = () => go("progress");
+  $("#kids").onclick = () => go(St.kids().length > 1 ? "kids" : "newkid");
 };
+
+// ---------- PLAYERS: one profile per child, each with their own progress ----------
+const AVAS = ["🚀", "🦊", "🐼", "🦄", "🐸", "🦁", "🐙", "🦖", "🐧", "🐝", "🌟", "🐬"];
+const gradeName = g => g.label === "K" ? "Kindergarten" : g.label === "Pre-K" ? "Pre-K" : g.label + " grade";
+SCREENS.kids = () => {
+  shell("Who's playing?", `
+    <div class="kidlist">${St.kids().map(k => { const s = k.id === St.kid().id;
+      return `<button class="kidcard ${s ? "on" : ""}" data-k="${k.id}"><span class="ava">${esc(k.ava)}</span><b>${esc(k.name)}</b>${s ? "<small>Playing now</small>" : ""}</button>`; }).join("")}
+      <button class="kidcard add" id="add"><span class="ava">＋</span><b>Add a child</b></button></div>
+    <div class="panel"><p>Each child has their own stars, planets and progress on this device. A grown-up can change a child's grades, unlock lessons, back up or remove a child in the Progress page.</p></div>`);
+  app.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { St.switchKid(b.dataset.k); go("home"); });
+  $("#add").onclick = () => go("newkid");
+};
+SCREENS.newkid = () => {
+  const first = !St.kid(), pick = { ava: AVAS.find(a => !St.kids().some(k => k.ava === a)) || AVAS[0], reading: "prek", math: "prek" };
+  const gradeRow = sub => `<div class="levels" data-sub="${sub}">${D.GRADES.map(g => `<button data-g="${g.id}" aria-pressed="${g.id === pick[sub]}">${g.label}</button>`).join("")}</div><p class="hint" id="hint-${sub}"></p>`;
+  shell(first ? "Welcome!" : "Add a child", `
+    <div class="panel setup">
+      ${first ? `<p>Sound Rocket teaches reading and math from Pre-K to 5th grade. Set up a player for each child; everyone's progress is kept separately on this device.</p>` : ""}
+      <label for="nm"><b>Child's name</b></label>
+      <input id="nm" maxlength="20" autocomplete="off" placeholder="Name" value="">
+      <p><b>Pick a picture</b></p>
+      <div class="avas">${AVAS.map(a => `<button data-a="${a}" aria-pressed="${a === pick.ava}">${a}</button>`).join("")}</div>
+      <p><b>📖 Start reading at</b></p>${gradeRow("reading")}
+      <p><b>🔢 Start math at</b></p>${gradeRow("math")}
+      <p>Grades before the starting one stay open for review. You can change this any time in the Progress page.</p>
+      <button class="btn yes big" id="go">Let's go! 🚀</button>
+      ${first ? `<label class="btn" id="restore">Restore a backup<input type="file" accept=".json,application/json" hidden></label>` : ""}
+    </div>`, { home: first });
+  const hint = sub => { const g = GRADE(pick[sub]); $("#hint-" + sub).textContent = `${g.planet} · ${gradeName(g)}: ${sub === "reading" ? D.READING[g.id].blurb : M.GRADE_SKILLS[g.id].map(([, d]) => d).slice(0, 3).join(", ")}`; };
+  hint("reading"); hint("math");
+  app.querySelectorAll(".levels button").forEach(b => b.onclick = () => {
+    const sub = b.parentElement.dataset.sub; pick[sub] = b.dataset.g;
+    b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); hint(sub);
+  });
+  app.querySelectorAll(".avas button").forEach(b => b.onclick = () => { pick.ava = b.dataset.a; app.querySelectorAll(".avas button").forEach(x => x.setAttribute("aria-pressed", x === b)); });
+  $("#go").onclick = () => {
+    const name = $("#nm").value.trim();
+    if (!name) { $("#nm").focus(); $("#nm").classList.add("bad"); return; }
+    St.addKid(name, pick.ava, pick); go("home"); route();
+  };
+  const r = app.querySelector("#restore input"); if (r) r.onchange = () => restoreFile(r.files[0]);
+};
+function restoreFile(f) {
+  if (!f) return;
+  f.text().then(t => { St.importKid(t); toast("Progress restored!"); go("home"); route(); }).catch(() => toast("That file isn't a Sound Rocket backup."));
+}
 
 // ---------- SOUND CARDS: Montessori three-period lesson ----------
 // 1 "This is /s/" (naming), 2 "Show me /s/" (recognition), 3 "What sound is this?" (recall)
@@ -724,7 +774,7 @@ SCREENS.progress = () => {
     .sort((a, b) => a[1].right / a[1].seen - b[1].right / b[1].seen).slice(0, 10).map(([k]) => math ? M.label(k) : k.split(":")[1]);
   const weak = weakOf(false), weakMath = weakOf(true);
   const storyList = D.STORIES.filter(s => S.stories[s.id]).map(s => `<span class="chip">📖 ${esc(s.title)} · ${S.stories[s.id].times}×</span>`).join("") || `<p>No stories finished yet.</p>`;
-  const holdRow = sub => D.GRADES.filter(g => !St.isOpen(sub, g.id)).map(g => `<button class="btn hold" data-hold="${sub}:${g.id}">${g.label}</button>`).join("") || `<p>All grades open.</p>`;
+  const gradeRow = sub => D.GRADES.map(g => `<button class="btn hold ${g.id === S.grade[sub] ? "yes" : ""}" data-hold="${sub}:${g.id}">${g.label}</button>`).join("");
   shell("Progress", `
     <div class="panel"><h3>Today</h3>
       <div class="stats">
@@ -738,12 +788,12 @@ SCREENS.progress = () => {
     <div class="panel"><h3>📖 Letter sounds</h3>
       <div class="soundgrid">${allSounds.map(s => `<div class="sg ${cls(s)}">${D.SOUNDS[s][0]}</div>`).join("")}</div>
       <div class="legend"><span style="--c:#F1F4FB">Not tried</span><span style="--c:#FFF1C9">Started</span><span style="--c:#FFE08A">Learning</span><span style="--c:#CFF2DC">Knows it</span></div></div>
-    <div class="panel"><h3>📖 Words he can read</h3>${lvRows}
+    <div class="panel"><h3>📖 Words read</h3>${lvRows}
       <p>Tricky words known: ${tricky.length}/${D.TRICKY.length}${tricky.length ? " · " + tricky.map(esc).join(", ") : ""}</p></div>
     <div class="panel"><h3>📖 Stories read</h3><div class="chips">${storyList}</div></div>
     <div class="panel"><h3>🔢 Math</h3><p>Answers right on the first try, per grade. ${MATH_UNLOCK} opens the next planet.</p>${mathRows}
       <p>Math facts mastered: ${facts.filter(k => St.mastered(k)).length} of ${facts.length} practiced.</p></div>
-    ${weak.length || weakMath.length ? `<div class="panel"><h3>Needs more practice</h3><p>These come up more often until he gets them.</p>
+    ${weak.length || weakMath.length ? `<div class="panel"><h3>Needs more practice</h3><p>These come up more often until they stick.</p>
       ${weak.length ? `<div class="chips">${weak.map(w => `<span class="chip">📖 ${esc(w)}</span>`).join("")}</div>` : ""}
       ${weakMath.length ? `<div class="chips">${weakMath.map(w => `<span class="chip">🔢 ${esc(w)}</span>`).join("")}</div>` : ""}</div>` : ""}
     <div class="panel"><h3>Grown-up corner</h3>
@@ -755,14 +805,21 @@ SCREENS.progress = () => {
         <li><b>Sounds, not letter names:</b> say "mmm," not "em." Stop sounds are short: "b," not "buh."</li>
         <li><b>Three steps (Montessori):</b> Sound Cards and Number Cards teach "This is…", then "Show me…", then "What is this?"</li>
         <li><b>Colours:</b> vowels are blue and consonants red, like the Montessori movable alphabet. Silent letters are grey.</li>
-        <li><b>Mistakes are fine:</b> wrong taps play their own sound so he can hear the difference. After two misses in math the answer is shown. Misses never take stars away.</li>
+        <li><b>Mistakes are fine:</b> wrong taps play their own sound so the difference can be heard. After two misses in math the answer is shown. Misses never take stars away.</li>
         <li><b>Unlocking:</b> a reading planet opens when enough words on the one before are known; a math planet opens after ${MATH_UNLOCK} first-try answers. Starting higher? Unlock a grade below.</li>
-        <li>Progress is saved on this device. On an iPad, tap Share → Add to Home Screen to open it like an app.</li>
+        <li>Each child's progress is saved on this device; "Back up progress" moves it to another one. On an iPhone or iPad, tap Share → Add to Home Screen to open it like an app.</li>
       </ul>
-      <p>Hold a button for 2 seconds to use it. Unlocking a grade opens the grades before it too.</p>
-      <p><b>Unlock a whole grade: reading</b></p><div class="row">${holdRow("reading")}</div>
-      <p><b>Unlock a whole grade: math</b></p><div class="row">${holdRow("math")}</div>
-      <div class="row"><button class="btn try hold" data-hold="reset">Reset progress</button></div></div>
+    </div>
+    <div class="panel"><h3>${esc(St.kid().ava)} Settings for ${esc(St.kid().name)}</h3>
+      <p>Hold a button for 2 seconds to use it (so little fingers can't change things by accident).</p>
+      <p><b>📖 Reading grade</b>: now on ${GRADE(S.grade.reading).label}. Hold a grade to jump there; grades before it open too.</p><div class="row">${gradeRow("reading")}</div>
+      <p><b>🔢 Math grade</b>: now on ${GRADE(S.grade.math).label}.</p><div class="row">${gradeRow("math")}</div>
+      <div class="row"><button class="btn hold" data-hold="all:reading">Open every reading planet</button><button class="btn hold" data-hold="all:math">Open every math planet</button></div>
+      <div class="row"><button class="btn" id="rename">Rename</button><button class="btn" id="backup">Back up progress</button>
+        <label class="btn">Restore a backup<input type="file" id="restorefile" accept=".json,application/json" hidden></label></div>
+      <div class="row"><button class="btn try hold" data-hold="reset">Start ${esc(St.kid().name)} over</button><button class="btn try hold" data-hold="remove">Remove ${esc(St.kid().name)}</button></div></div>
+    <div class="panel"><h3>👋 Share with friends</h3><p>Send this link to other families. Each family's progress stays on their own phone or tablet, and they can add a player for each of their kids.</p>
+      <div class="row"><button class="btn yes" id="share">Share Sound Rocket</button></div></div>
     <div class="panel"><h3>🔊 Sound check</h3>
       <p>No sound? Turn the volume up, then tap a test. If test 1 is silent but test 2 works, the game will use the second way automatically.</p>
       <div class="row"><button class="btn" id="snd1">Test 1</button><button class="btn" id="snd2">Test 2</button></div>
@@ -779,6 +836,17 @@ SCREENS.progress = () => {
   $("#snd1").onclick = async () => { await A.play("p_great"); sndInfo(); };
   $("#snd2").onclick = async () => { await A.playElement("p_great"); sndInfo(); };
   sndInfo();
+  $("#rename").onclick = () => { const n = (prompt("Child's name", St.kid().name) || "").trim().slice(0, 20); if (n) { St.editKid(St.kid().id, { name: n }); SCREENS.progress(); } };
+  $("#backup").onclick = () => {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([St.exportKid()], { type: "application/json" }));
+    a.download = `sound-rocket-${D.slug(St.kid().name) || "player"}-${St.dayKey()}.json`; document.body.appendChild(a); a.click(); a.remove();
+  };
+  $("#restorefile").onchange = e => restoreFile(e.target.files[0]);
+  $("#share").onclick = async () => {
+    const link = location.origin + location.pathname, text = "Sound Rocket: a free reading and math game for kids, Pre-K to 5th grade.";
+    try { if (navigator.share) { await navigator.share({ title: "Sound Rocket", text, url: link }); return; } } catch (e) { if (e.name === "AbortError") return; }
+    try { await navigator.clipboard.writeText(link); toast("Link copied: " + link, 3500); } catch (e) { prompt("Copy this link", link); }
+  };
   app.querySelectorAll("[data-ps]").forEach(b => b.onclick = () => { lp.sub = b.dataset.ps; SCREENS.progress(); $("#lessonpick").scrollIntoView(); });
   app.querySelectorAll("[data-pg]").forEach(b => b.onclick = () => { lp.g = b.dataset.pg; SCREENS.progress(); $("#lessonpick").scrollIntoView(); });
   app.querySelectorAll("[data-hold]").forEach(b => {
@@ -786,7 +854,9 @@ SCREENS.progress = () => {
     const tick = () => { const p = Math.min(1, (Date.now() - t0) / 2000); b.style.setProperty("--p", p); if (p >= 1) { done(); return; } raf = requestAnimationFrame(tick); };
     const done = () => {
       cancelAnimationFrame(raf); t0 = 0; const [sub, gid, ...rest] = b.dataset.hold.split(":");
-      if (sub === "reset") { St.reset(); toast("Progress reset"); }
+      if (sub === "reset") { St.reset(); toast("Started over"); }
+      else if (sub === "remove") { const n = St.kid().name; St.removeKid(St.kid().id); toast(n + " removed"); go("home"); route(); return; }
+      else if (sub === "all") { D.GRADES.forEach(g => St.unlock(gid, g.id)); toast("Every planet is open"); }
       else if (sub === "lesson") {
         const [g, act, on] = rest; St.setLesson(gid, g, act, on === "1");
         if (on === "1") { St.setSubject(gid); St.setLevel(gid, g); toast("Lesson unlocked! It's on the home screen now."); } else toast("Lesson locked");
