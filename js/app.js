@@ -169,7 +169,8 @@ SCREENS.home = () => {
     <text x="42" y="48" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="20" fill="#fff">${d.stars}</text></svg>`;
   const blurb = PRACTICE[sub] ? PRACTICE[sub].GRADE_SKILLS[cur.id].map(([, s]) => s).slice(0, 3).join(" · ") : level().blurb;
   shell("Sound Rocket", `
-    <button class="kidchip" id="kids"><span>${esc(St.kid().ava)}</span><b>${esc(St.kid().name)}</b><small>${St.kids().length > 1 ? "Switch player" : "Add a player"}</small></button>
+    <div class="toprow"><button class="kidchip" id="kids"><span>${esc(St.kid().ava)}</span><b>${esc(St.kid().name)}</b><small>${St.kids().length > 1 ? "Switch player" : "Add a player"}</small></button>
+      <button class="help" id="help" aria-label="How to play">❓<small>How to play</small></button></div>
     <div class="mission">${ring}<div><h2>${d.stars >= St.GOAL ? "Mission complete today!" : `Today's mission: ${St.GOAL} stars`}</h2>
       <p>${d.stars >= St.GOAL ? "Great work. Keep going for bonus stars!" : `${St.GOAL - d.stars} stars to go`} · ${streak} day streak 🔥</p></div></div>
     <div class="subjects" role="tablist" aria-label="Subject">
@@ -179,6 +180,7 @@ SCREENS.home = () => {
       return `<button class="planet ${locked ? "locked" : ""}" data-l="${g.id}" aria-pressed="${g.id === cur.id}" aria-label="${g.label}, ${g.planet}${locked ? ", locked" : ""}">
         <span class="orb" style="background:${g.orb}"></span><b>${locked ? "🔒 " : ""}${g.label}</b><small>${g.planet}</small></button>`;
     }).join("")}</div>
+    ${nextPlanetBar(sub)}
     <p class="where"><b>${cur.planet} · ${cur.label === "K" ? "Kindergarten" : cur.label === "Pre-K" ? "Pre-K" : cur.label + " grade"} ${SUBJ[sub][1].toLowerCase()}</b>${blurb ? ": " + esc(blurb) : ""}</p>
     <div class="acts">${homeActs()}</div>
     <button class="grownup" id="prog">📈 Progress and grown-up corner</button>`, { home: true });
@@ -192,6 +194,41 @@ SCREENS.home = () => {
   app.querySelectorAll(".act[data-m]").forEach(b => b.onclick = () => b.classList.contains("locked") ? lockedMsg() : go(b.dataset.p, b.dataset.m));
   $("#prog").onclick = () => go("progress");
   $("#kids").onclick = () => go(St.kids().length > 1 ? "kids" : "newkid");
+  $("#help").onclick = () => go("howto");
+};
+
+// How close the next locked planet is: progress is earned on the planet just before it.
+function nextPlanetBar(sub) {
+  const i = D.GRADES.findIndex(g => !St.isOpen(sub, g.id));
+  if (i < 0) return `<div class="nextbar done"><span>🏆 Every ${SUBJ[sub][1].toLowerCase()} planet is open!</span></div>`;
+  const next = D.GRADES[i], prev = D.GRADES[i - 1];
+  let n, of, what;
+  if (sub === "reading") { n = readingKnown(prev.id); of = READ_UNLOCK[prev.id]; what = prev.id === "prek" ? "letter sounds learned" : "words learned"; }
+  else { n = St.rightCount(sub, prev.id); of = UNLOCK[sub]; what = "answers right on the first try"; }
+  n = Math.min(n, of);
+  const here = St.S.grade[sub] === prev.id;
+  return `<div class="nextbar" role="group" aria-label="Next planet">
+    <span class="orb" style="background:${next.orb}"></span>
+    <div><b>Next planet: ${next.planet} (${next.label})</b>
+      <div class="meter"><i style="width:${n / of * 100}%"></i></div>
+      <small>${n} of ${of} ${what}${here ? "" : ` on ${prev.planet} (${prev.label})`}</small></div></div>`;
+}
+
+// ---------- HOW TO PLAY ----------
+SCREENS.howto = () => {
+  const steps = [
+    ["📚", "Pick a subject", "Reading, Math or Geography. Tap the tabs at the top of the home screen."],
+    ["🪐", "Pick a planet", "Each planet is a grade, from the Moon (Pre-K) to Pluto (5th grade). A 🔒 planet isn't open yet."],
+    ["👆", "Play an activity", "Tap a card and answer. Tap 🔊 Hear it any time to hear the question again."],
+    ["⭐", "Earn stars", "Right answers earn stars. Wrong answers never take stars away: just try again."],
+    ["🚀", "Fill the rocket", "Every 20 stars fills the fuel bar and the rocket blasts off. Get 20 stars in a day for Today's mission, and play every day for a streak 🔥."],
+    ["🔓", "Open new planets", "The Next planet bar on the home screen shows how close the next grade is. Keep playing on the planet before it to fill the bar."],
+    ["👪", "For grown-ups", "Tap 📈 Progress at the bottom of the home screen to see what your child knows, open any grade or lesson, add players and back up progress."]
+  ];
+  shell("How to play", `<div class="panel howto">${steps.map(([ico, h, t], i) => `<div class="step"><span class="ico">${ico}</span><div><b>${i + 1}. ${h}</b><p>${t}</p></div></div>`).join("")}
+    <button class="btn yes big" id="gotit">Got it! Let's play 🚀</button></div>`);
+  try { localStorage.setItem("soundRocket.howto", "1"); } catch (e) {}
+  $("#gotit").onclick = () => go("home");
 };
 
 // ---------- PLAYERS: one profile per child, each with their own progress ----------
@@ -233,7 +270,9 @@ SCREENS.newkid = () => {
   $("#go").onclick = () => {
     const name = $("#nm").value.trim();
     if (!name) { $("#nm").focus(); $("#nm").classList.add("bad"); return; }
-    St.addKid(name, pick.ava, pick); go("home"); route();
+    St.addKid(name, pick.ava, pick);
+    let seen = false; try { seen = !!localStorage.getItem("soundRocket.howto"); } catch (e) {}
+    go(seen ? "home" : "howto"); route();
   };
   const r = app.querySelector("#restore input"); if (r) r.onchange = () => restoreFile(r.files[0]);
 };

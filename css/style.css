@@ -56,6 +56,25 @@ button:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
 label.btn{display:inline-flex;align-items:center;justify-content:center}
 .setup .btn{align-self:center}
 
+.toprow{display:flex;gap:8px}
+.toprow .kidchip{flex:1}
+.help{border:none;border-radius:18px;background:var(--space2);color:#fff;font-size:1.3rem;padding:6px 12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.1}
+.help small{font-family:var(--display);font-size:.7rem;color:#B9C6EE}
+.nextbar{display:flex;align-items:center;gap:12px;background:var(--space2);border-radius:18px;padding:10px 14px}
+.nextbar .orb{width:40px;height:40px;border-radius:50%;flex:none;box-shadow:inset -6px -6px 0 #0002}
+.nextbar>div{flex:1;display:flex;flex-direction:column;gap:5px}
+.nextbar b{font-family:var(--display);font-size:1.05rem}
+.nextbar small{color:#B9C6EE;font-size:.85rem}
+.nextbar .meter{height:12px;border-radius:6px;background:#0d1533;overflow:hidden}
+.nextbar .meter i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--sun),var(--try));min-width:4px}
+.nextbar.done{justify-content:center;font-family:var(--display);font-weight:700}
+.howto{gap:14px}
+.howto .step{display:flex;gap:12px;align-items:flex-start}
+.howto .ico{font-size:1.9rem;min-width:1.6em;text-align:center;line-height:1.2}
+.howto b{font-family:var(--display);font-size:1.1rem}
+.howto p{margin:2px 0 0;color:var(--muted)}
+.howto .btn{align-self:center;margin-top:6px}
+
 /* home */
 .mission{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;background:var(--space2);border-radius:22px;padding:14px 16px}
 .ring{width:84px;height:84px}

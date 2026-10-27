@@ -4,7 +4,7 @@ A reading, math and geography game from Pre-K to 5th grade. Open it at **https:/
 
 ## For families
 Share the link with anyone. Each family's progress stays on their own phone or tablet; nothing is sent anywhere.
-- **A player per child:** the first visit asks for the child's name, a picture, and which grade to start reading and math at (any grade from Pre-K to 5th; earlier grades stay open for review). Add more children from the home screen and switch between them.
+- **A player per child:** the first visit asks for the child's name, a picture, and which grade to start reading, math and geography at (any grade from Pre-K to 5th; earlier grades stay open for review). Add more children from the home screen and switch between them.
 - **Grown-up controls** (Progress page, per child, hold buttons for 2 seconds): move to any grade, open every planet, unlock a single lesson, rename, start over, remove, back up progress to a file and restore it on another device, and a sound check.
 
 ## What's in it
@@ -20,7 +20,7 @@ Reading, Math and Geography share seven planets, one per grade. Switch subjects 
 | Neptune | 4th | Prefixes and suffixes | Multi-digit multiply, remainders, equivalent fractions, decimals, place value, factors | State capitals, US regions, find the states, land and water words |
 | Pluto | 5th | Greek and Latin roots | Fraction and decimal operations, 2-digit multiply/divide, order of operations, volume | World capitals, countries on the map, latitude and hemispheres, climate zones |
 
-Reading planets open when enough words on the one before are known (Pre-K: 12 letter sounds; K and 1st: 20 words; then 15). Math planets open after 40 right-first-try answers, geography planets after 30. A grown-up can unlock any grade on the Progress page.
+The home screen's **Next planet** bar shows how close the next grade is, and **❓ How to play** explains the game (it opens on its own the first time a player is set up). Reading planets open when enough words on the one before are known (Pre-K: 12 letter sounds; K and 1st: 20 words; then 15). Math planets open after 40 right-first-try answers, geography planets after 30. A grown-up can unlock any grade on the Progress page.
 
 Reading activities:
 - **Sound Cards:** Montessori three-period lesson: "This is…", "Show me…", "What is this?"
