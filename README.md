@@ -20,7 +20,9 @@ Reading, Math and Geography share seven planets, one per grade. Switch subjects 
 | Neptune | 4th | Prefixes and suffixes | Multi-digit multiply, remainders, equivalent fractions, decimals, place value, factors | State capitals, US regions, find the states, land and water words |
 | Pluto | 5th | Greek and Latin roots | Fraction and decimal operations, 2-digit multiply/divide, order of operations, volume | World capitals, countries on the map, latitude and hemispheres, climate zones |
 
-The home screen's **Next planet** bar shows how close the next grade is, and **❓ How to play** explains the game (it opens on its own the first time a player is set up). Reading planets open when enough words on the one before are known (Pre-K: 12 letter sounds; K and 1st: 20 words; then 15). Math planets open after 40 right-first-try answers, geography planets after 30. A grown-up can unlock any grade on the Progress page.
+**Rounds:** every activity is played in short rounds: 10 questions (6 on Pre-K and K, fewer if the activity has fewer different questions), with no repeats inside a round and dots at the top showing how many are left. A round ends with a results screen: up to 3 stars (90% right = ★★★, 70% = ★★, 50% = ★), then Play again, Next activity or Home. Activity cards show their best stars, and ★★ or better checks an activity off ✓. Replays only give bonus stars when they beat the best score. Storybook earns a star per story read on that planet.
+
+**Planets** open when about 70% of the activities on the one before are checked off. The home screen's **Next planet** bar shows how many are done, and **❓ How to play** explains the game (it opens on its own the first time a player is set up). A grown-up can unlock any grade on the Progress page.
 
 Reading activities:
 - **Sound Cards:** Montessori three-period lesson: "This is…", "Show me…", "What is this?"

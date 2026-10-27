@@ -233,7 +233,8 @@ window.DATA = (() => {
     // added with the grade levels and math
     mission2:"Mission complete! Great work today!", blast2:"Blast off! Great work!", chunks:"Good chunks! Now read the whole word.",
     meaning:"What does this word mean?", silent:"This e is silent. It makes the vowel say its name.", answeris:"The answer is",
-    smart:"Smart thinking!", correct:"That's right!"
+    smart:"Smart thinking!", correct:"That's right!",
+    round:"Round complete! Great job!", round3:"Three stars! Amazing!", roundbest:"Round complete! New best score!", roundtry:"Round complete! Play again to earn more stars."
   };
 
   return { GRADES, SOUNDS, SOUND_CLIP, PINK_SOUNDS, GREEN_SOUNDS, LONG_SOUNDS, VOWELS, PHONOGRAMS, READING, TRICKY, TRICKY_BY, VOCAB, STORIES, PHRASES, tiles, slug };

@@ -16,6 +16,8 @@ window.GEO = (() => {
 
   // ---------- content ----------
   const CONT = { AF: "Africa", AN: "Antarctica", AS: "Asia", EU: "Europe", NA: "North America", OC: "Australia", SA: "South America" };
+  const OCEAN_FACTS = { Pacific: "The biggest and deepest ocean is the…", Atlantic: "The ocean between the Americas and Europe and Africa is the…",
+    Indian: "The ocean south of India is the…", Arctic: "The cold ocean around the North Pole is the…", Southern: "The ocean all around Antarctica is the…" };
   const OCEANS = { Pacific: ["pacificN", "pacificS", "pacificW"], Atlantic: ["atlanticN", "atlanticS"], Indian: ["indian", "indianW"], Arctic: ["arctic", "arcticW"], Southern: ["southern", "southernW"] };
   // [code, name, capital]
   const COUNTRIES = [["US", "United States", "Washington, D.C."], ["CA", "Canada", "Ottawa"], ["MX", "Mexico", "Mexico City"], ["CU", "Cuba", "Havana"], ["JM", "Jamaica", "Kingston"],
@@ -146,13 +148,17 @@ window.GEO = (() => {
       return { q: "Which continent is orange?", say: [nm("Which continent is orange?")], vis: world({ cont: c }), ans: CONT[c], choices: pickFrom(CONT[c], Object.values(CONT), 4), after: [nm(CONT[c])] };
     } };
   SK.oceans = { name: "Oceans", ico: "🌊", tag: "World map",
-    keys: () => Object.keys(OCEANS).map(o => "g:ocean:" + o),
-    gen(g, key) { const o = key.split(":")[2];
+    keys: () => Object.keys(OCEANS).flatMap(o => ["g:ocean:" + o, "g:oceanq:" + o]),
+    gen(g, key) { const [, kind, o] = key.split(":");
+      if (kind === "oceanq") { const q = OCEAN_FACTS[o];
+        return { q, say: [nm(q)], vis: "", ans: o, choices: pickFrom(o, Object.keys(OCEANS), 4, x => x + " Ocean").map(c => ({ ...c, say: [nm(c.v + " Ocean")] })), after: [nm(o + " Ocean")] }; }
       return { q: "Which ocean has the red dot?", say: [nm("Which ocean has the red dot?")], vis: world({ dot: G.world.pt[one(OCEANS[o])] }), ans: o,
         choices: pickFrom(o, Object.keys(OCEANS), 4, x => x + " Ocean").map(c => ({ ...c, say: [nm(c.v + " Ocean")] })), after: [nm(o + " Ocean")] }; } };
   SK.compass = { name: "Compass", ico: "🧭", tag: "Directions",
-    keys: g => (g === "g1" ? ["North", "East", "South", "West"] : Object.keys(DIRS)).map(d => "g:dir:" + d),
-    gen(g, key) { const d = key.split(":")[2], pool = g === "g1" ? ["North", "East", "South", "West"] : Object.keys(DIRS);
+    keys: g => (g === "g1" ? ["North", "East", "South", "West"] : Object.keys(DIRS)).flatMap(d => ["g:dir:" + d, ...(d.includes(" ") ? [] : ["g:dirl:" + d])]),
+    gen(g, key) { const [, kind, d] = key.split(":"), pool = g === "g1" ? ["North", "East", "South", "West"] : Object.keys(DIRS);
+      if (kind === "dirl") return { q: `On a compass, the letter <b>${d[0]}</b> stands for…`, say: [nm("On a compass, the letter " + d[0] + " stands for")], vis: `<span class="emo big">🧭</span>`, ans: d,
+        choices: pickFrom(d, ["North", "East", "South", "West"], 4), after: [nm(d)] };
       return { q: "Which way is the arrow pointing?", say: [nm("Which way is the arrow pointing?")], vis: compass(d), ans: d, choices: pickFrom(d, pool, 4), after: [nm(d)] }; } };
   SK.symbols = { name: "Map Symbols", ico: "🗺️", tag: "Map keys",
     keys: () => Object.keys(SYMBOLS).map(s => "g:sym:" + s),

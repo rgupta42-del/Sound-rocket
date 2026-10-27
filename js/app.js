@@ -56,7 +56,7 @@ function shell(title, inner, opts = {}) {
       <div class="gauge" role="progressbar" aria-label="Rocket fuel" aria-valuemin="0" aria-valuemax="20" aria-valuenow="${f}"><i id="fuelbar" style="width:${f / 20 * 100}%"></i></div>
       <small>${S.launches} ${S.launches === 1 ? "launch" : "launches"}</small>
     </div>
-    ${inner}`;
+    ${roundBar()}${inner}`;
   const b = $("#back"); if (b) b.onclick = () => go("home");
 }
 function refreshStars() {
@@ -96,21 +96,65 @@ async function award(n, clips) {
   checkUnlocks();
   if (nav !== navId) return new Promise(() => {});
 }
-// Reading: a planet opens when enough of the one before is known. Math: after 40 first-try answers.
-const READ_UNLOCK = { prek: 12, k: 20, g1: 20, g2: 15, g3: 15, g4: 15 };
-const MATH_UNLOCK = 40;
-const UNLOCK = { math: MATH_UNLOCK, geo: 30 };   // first-try answers that open the next math / geography planet
-function readingKnown(id) {
-  const l = D.READING[id];
-  if (id === "prek") return D.PINK_SOUNDS.filter(s => soundBox(s) >= St.MASTERED).length;
-  return [...levelWords(l).map(x => x[0]), ...l.vocab.map(v => v[0])].filter(wordKnown).length;
-}
+// A planet opens when most activities on the one before have a ✓ (2 or more stars in a round).
+const doneCount = (sub, g) => lessons(sub, g).filter(([id]) => St.best(`${sub}:${g}:${id}`) >= 2).length;
+const doneNeeded = (sub, g) => Math.ceil(lessons(sub, g).length * 0.7);
 function checkUnlocks() {
   D.GRADES.slice(0, -1).forEach((g, i) => {
     const next = D.GRADES[i + 1];
-    if (St.isOpen("reading", g.id) && readingKnown(g.id) >= READ_UNLOCK[g.id] && St.unlock("reading", next.id)) { toast(`New reading planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
-    for (const sub of ["math", "geo"]) if (St.isOpen(sub, g.id) && St.rightCount(sub, g.id) >= UNLOCK[sub] && St.unlock(sub, next.id)) { toast(`New ${SUBJ[sub][1].toLowerCase()} planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
+    for (const sub of St.SUBJECTS) if (St.isOpen(sub, g.id) && doneCount(sub, g.id) >= doneNeeded(sub, g.id) && St.unlock(sub, next.id)) {
+      toast(`New ${SUBJ[sub][1].toLowerCase()} planet: ${next.planet} (${next.label})! 🪐`, 3500); A.play("p_levelup"); }
   });
+}
+
+// ---------- ROUNDS: each activity is played in short rounds with a finish line ----------
+// 10 questions (6 on Pre-K and K), fewer if the activity has fewer different questions; no repeats inside a round.
+let round = null;
+const ACT_SCREENS = ["sounds", "trace", "ispy", "blend", "build", "match", "tricky", "vocab", "math", "geo"];
+function startRound(name, arg) {
+  if (!ACT_SCREENS.includes(name)) { round = null; return; }
+  const sub = PRACTICE[name] ? name : "reading", act = PRACTICE[name] ? arg : name, g = St.S.grade[sub];
+  round = { sub, act, g, total: 0, n: 0, right: 0, seen: new Set(), base: ["prek", "k"].includes(g) ? 6 : 10 };
+}
+const roundSize = (pool = Infinity) => { if (round && !round.total) round.total = Math.max(1, Math.min(round.base, pool)); };
+function pickR(keys, opts) {
+  if (!round) return St.pick(keys, opts);
+  roundSize(keys.length);
+  const fresh = keys.filter(k => !round.seen.has(k)), k = St.pick(fresh.length ? fresh : keys, opts);
+  round.seen.add(k); return k;
+}
+const roundBar = () => round && round.total ? `<div class="roundbar" aria-label="Question ${round.n + 1} of ${round.total}">${Array.from({ length: round.total }, (_, i) => `<i class="${i < round.n ? "done" : i === round.n ? "now" : ""}"></i>`).join("")}</div>` : "";
+// one question finished: count it, then the next question or the round's results
+function advance(ok, cont) {
+  if (!round) return cont();
+  round.n++; if (ok) round.right++;
+  if (round.n >= round.total) return results();
+  cont();
+}
+const starsFor = (right, total) => { const p = right / total; return p >= .9 ? 3 : p >= .7 ? 2 : p >= .5 ? 1 : 0; };
+const starRow = n => `<span class="stars" aria-label="${n} of 3 stars">${[1, 2, 3].map(i => i <= n ? "★" : "☆").join("")}</span>`;
+async function results() {
+  const r = round, stars = starsFor(r.right, r.total), key = `${r.sub}:${r.g}:${r.act}`, prev = St.best(key);
+  St.setBest(key, stars);
+  const better = stars > prev, bonus = better ? (stars - prev) * 2 : 0;   // bonus only for beating your best, so replays can't farm stars
+  const list = lessons(r.sub, r.g), name = (list.find(([id]) => id === r.act) || [])[2] || "Round";
+  const nextAct = [...list.slice(list.findIndex(([id]) => id === r.act) + 1), ...list].find(([id]) => id !== r.act && St.lessonOpen(r.sub, r.g, id) && St.best(`${r.sub}:${r.g}:${id}`) < 2)
+    || list[list.findIndex(([id]) => id === r.act) + 1];
+  const replay = { ...r }; round = null;
+  shell("Round complete!", `<section class="card results">
+    <p class="prompt big">${esc(name)}</p>
+    <div class="bigstars">${starRow(stars)}</div>
+    <p class="score">${r.right} of ${r.total} right the first time</p>
+    <p class="prompt">${better ? (prev ? "New best! " : "") + (bonus ? `+${bonus} bonus stars ⭐` : "") : stars >= 2 ? "Great job! Your best is " + prev + " stars." : "Keep practicing. Every round makes you stronger!"}</p>
+    ${stars >= 2 ? `<p class="prompt">✓ This activity counts toward the next planet.</p>` : `<p class="prompt">Get 2 stars to check off this activity.</p>`}
+    <div class="row"><button class="btn yes big" id="again">↻ Play again</button>${nextAct ? `<button class="btn big" id="nextact">Next: ${esc(nextAct[2])} →</button>` : ""}</div>
+    <div class="row"><button class="btn" id="home">🏠 Home</button></div></section>`);
+  if (stars === 3) confetti(120);
+  const open = (sub, act) => { const hash = sub === "reading" ? act : sub + "-" + act; if (location.hash.slice(1) === hash) route(); else go(...(sub === "reading" ? [act] : [sub, act])); };
+  $("#again").onclick = () => open(replay.sub, replay.act);
+  if (nextAct) $("#nextact").onclick = () => open(replay.sub, nextAct[0]);
+  $("#home").onclick = () => go("home");
+  if (bonus) await award(bonus, [stars === 3 ? "p_round3" : "p_roundbest"]); else { A.play(stars >= 2 ? "p_round" : "p_roundtry"); checkUnlocks(); }
 }
 const lit = (el, on) => el && el.classList.toggle("on", on);
 const partsHTML = (parts, extra = "") => parts.map((p, i) => `<button class="tile ${partClass(p)} ${extra}" data-i="${i}">${esc(p.d)}</button>`).join("");
@@ -128,6 +172,7 @@ function route() {
   A.stop(); document.onkeydown = null; navId++;
   const h = location.hash.slice(1), [name, ...rest] = h.split("-");
   if (!St.kid() && name !== "newkid") return SCREENS.newkid();
+  startRound(name, rest.join("-"));
   (SCREENS[name] || SCREENS.home)(rest.join("-"));
   window.scrollTo(0, 0);
 }
@@ -160,7 +205,9 @@ function lessons(sub, g) {
 function homeActs() {
   const sub = St.S.subject, g = St.S.grade[sub], attr = PRACTICE[sub] ? `data-p="${sub}" data-m` : "data-a";
   return lessons(sub, g).map(([id, ico, name, desc, tag]) => { const locked = !St.lessonOpen(sub, g, id);
-    return `<button class="act ${locked ? "locked" : ""}" ${attr}="${id}"><span class="ico">${locked ? "🔒" : ico}</span><b>${name}</b><small>${desc}</small><span class="tag">${tag}</span></button>`; }).join("");
+    const best = St.best(`${sub}:${g}:${id}`);
+    return `<button class="act ${locked ? "locked" : ""} ${best >= 2 ? "checked" : ""}" ${attr}="${id}"><span class="ico">${locked ? "🔒" : ico}</span><b>${name}</b><small>${desc}</small>
+      <span class="actfoot">${locked ? `<span class="tag">${tag}</span>` : starRow(best) + (best >= 2 ? `<span class="check">✓</span>` : "")}</span></button>`; }).join("");
 }
 SCREENS.home = () => {
   const S = St.S, d = St.today(), pct = Math.min(1, d.stars / St.GOAL), streak = St.streak(), sub = S.subject, cur = GRADE(S.grade[sub]);
@@ -202,10 +249,7 @@ function nextPlanetBar(sub) {
   const i = D.GRADES.findIndex(g => !St.isOpen(sub, g.id));
   if (i < 0) return `<div class="nextbar done"><span>🏆 Every ${SUBJ[sub][1].toLowerCase()} planet is open!</span></div>`;
   const next = D.GRADES[i], prev = D.GRADES[i - 1];
-  let n, of, what;
-  if (sub === "reading") { n = readingKnown(prev.id); of = READ_UNLOCK[prev.id]; what = prev.id === "prek" ? "letter sounds learned" : "words learned"; }
-  else { n = St.rightCount(sub, prev.id); of = UNLOCK[sub]; what = "answers right on the first try"; }
-  n = Math.min(n, of);
+  const of = doneNeeded(sub, prev.id), n = Math.min(doneCount(sub, prev.id), of), what = "activities with ✓ (2 stars)";
   const here = St.S.grade[sub] === prev.id;
   return `<div class="nextbar" role="group" aria-label="Next planet">
     <span class="orb" style="background:${next.orb}"></span>
@@ -221,8 +265,9 @@ SCREENS.howto = () => {
     ["🪐", "Pick a planet", "Each planet is a grade, from the Moon (Pre-K) to Pluto (5th grade). A 🔒 planet isn't open yet."],
     ["👆", "Play an activity", "Tap a card and answer. Tap 🔊 Hear it any time to hear the question again."],
     ["⭐", "Earn stars", "Right answers earn stars. Wrong answers never take stars away: just try again."],
+    ["🏁", "Finish rounds", "Each activity is a short round of questions (the dots at the top show how many are left). At the end you get up to 3 stars: ★★ or more checks it off ✓. Play again any time to beat your best."],
     ["🚀", "Fill the rocket", "Every 20 stars fills the fuel bar and the rocket blasts off. Get 20 stars in a day for Today's mission, and play every day for a streak 🔥."],
-    ["🔓", "Open new planets", "The Next planet bar on the home screen shows how close the next grade is. Keep playing on the planet before it to fill the bar."],
+    ["🔓", "Open new planets", "Check off most activities on a planet and the next planet opens. The Next planet bar on the home screen shows how many you've done."],
     ["👪", "For grown-ups", "Tap 📈 Progress at the bottom of the home screen to see what your child knows, open any grade or lesson, add players and back up progress."]
   ];
   shell("How to play", `<div class="panel howto">${steps.map(([ico, h, t], i) => `<div class="step"><span class="ico">${ico}</span><div><b>${i + 1}. ${h}</b><p>${t}</p></div></div>`).join("")}
@@ -285,7 +330,7 @@ function restoreFile(f) {
 // 1 "This is /s/" (naming), 2 "Show me /s/" (recognition), 3 "What sound is this?" (recall)
 SCREENS.sounds = () => {
   const pool = levelSounds(); if (!pool.length) return go("home");
-  const k = St.pick(pool.map(s => "snd:" + s));
+  const k = pickR(pool.map(s => "snd:" + s));
   const s = k.slice(4), it = St.item(k);
   const period = !it.seen ? 1 : (it.box >= 2 ? (Math.random() < .65 ? 3 : 2) : (Math.random() < .6 ? 2 : 3));
   shell("Sound Cards", `<section class="card" id="card"></section>`);
@@ -322,7 +367,7 @@ function soundP2(s, k, pool, fromP1) {
     if (b.dataset.s === s) {
       b.classList.add("good"); St.grade(k, miss === 0, "sounds");
       await award(miss ? 1 : 2, [SN(s), cheer()]);
-      if (fromP1) soundP3(s, k, pool); else SCREENS.sounds();
+      if (fromP1) soundP3(s, k, pool); else advance(miss === 0, SCREENS.sounds);
     } else {
       miss++; b.classList.add("bad"); await A.play([SN(b.dataset.s), "p_notquite"], 200); ask();
     }
@@ -337,15 +382,16 @@ function soundP3(s, k) {
   A.play("p_whatsound");
   const t = $("#t");
   t.onclick = async () => { lit(t, true); await A.play(SN(s)); lit(t, false); };
-  $("#ok").onclick = async () => { St.grade(k, true, "sounds"); await award(1); SCREENS.sounds(); };
-  $("#help").onclick = async () => { St.grade(k, false, "sounds"); const [, kw] = D.SOUNDS[s]; lit(t, true); await A.play([SN(s), "p_like", W(kw), SN(s)], 200); lit(t, false); };
-  $("#skip").onclick = () => SCREENS.sounds();
+  let helped = false;
+  $("#ok").onclick = async () => { St.grade(k, !helped, "sounds"); await award(1); advance(!helped, SCREENS.sounds); };
+  $("#help").onclick = async () => { helped = true; St.grade(k, false, "sounds"); const [, kw] = D.SOUNDS[s]; lit(t, true); await A.play([SN(s), "p_like", W(kw), SN(s)], 200); lit(t, false); };
+  $("#skip").onclick = () => advance(false, SCREENS.sounds);
 }
 
 // ---------- TRACE IT: sandpaper letters (and sandpaper numerals in math) ----------
 SCREENS.trace = () => {
   const pool = levelSounds(); if (!pool.length) return go("home");
-  const k = St.pick(pool.map(s => "trace:" + s));
+  const k = pickR(pool.map(s => "trace:" + s));
   const s = k.slice(6), [disp, kw, pic] = D.SOUNDS[s];
   traceScreen({ title: "Trace It", prompt: "Trace the letter with your finger. Say the sound as you trace.", disp, vowel: isVowel(s),
     kw: `<span>${pic}</span> ${disp}… like ${kw}`, say: ["p_trace", SN(s)], hear: [SN(s), "p_like", W(kw)], clip: SN(s), skipLabel: "Next letter",
@@ -360,7 +406,7 @@ function traceScreen(o) {
     <div class="row"><button class="btn" id="hear">🔊 Hear it</button><button class="btn" id="clear">Clear</button><button class="btn" id="skip">${o.skipLabel}</button></div></section>`);
   A.play(o.say, 200);
   $("#hear").onclick = () => A.play(o.hear, 150);
-  $("#skip").onclick = o.next;
+  $("#skip").onclick = () => advance(false, o.next);
   const cv = $("#cv"), dpr = Math.min(2, devicePixelRatio || 1);
   const size = cv.getBoundingClientRect().width; cv.width = cv.height = Math.round(size * dpr);
   const g = cv.getContext("2d"), mask = document.createElement("canvas"); mask.width = mask.height = cv.width;
@@ -399,7 +445,7 @@ function traceScreen(o) {
     }
     if (!done && hits.size / total > .55) {
       done = true; await o.done();
-      await wait(400); o.next();
+      await wait(400); advance(true, o.next);
     }
   };
   $("#clear").onclick = () => { base(); hits = new Set(); done = false; };
@@ -412,7 +458,7 @@ SCREENS.ispy = () => {
   words.forEach(w => (bySound[firstSound(w)] ||= []).push(w));
   const allowed = new Set((rgrade() === "g1" ? [...D.PINK_SOUNDS, ...D.GREEN_SOUNDS] : levelSounds()).map(soundGroup));
   const sounds = Object.keys(bySound).filter(s => allowed.has(s));
-  const k = St.pick(sounds.map(s => "spy:" + s), { ordered: false });
+  const k = pickR(sounds.map(s => "spy:" + s), { ordered: false });
   const s = k.slice(4), target = St.sample(bySound[s], 1)[0];
   const distract = St.sample(words.filter(w => firstSound(w) !== s), 12);
   const ds = []; for (const w of distract) if (ds.length < 2 && !ds.some(x => firstSound(x) === firstSound(w))) ds.push(w);
@@ -425,13 +471,13 @@ SCREENS.ispy = () => {
   A.preload(opts.map(W));
   const ask = () => A.play(["p_ispy", SN(s), SN(s)], 250);
   ask(); $("#again").onclick = ask; $("#snd").onclick = () => A.play(SN(s));
-  $("#skip").onclick = () => SCREENS.ispy();
+  $("#skip").onclick = () => advance(false, SCREENS.ispy);
   let miss = 0;
   app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
     const w = b.dataset.w;
     if (w === target) {
       b.classList.add("good"); St.grade(k, miss === 0, "ispy");
-      await award(miss ? 1 : 2, [W(w), SN(s), cheer()]); SCREENS.ispy();
+      await award(miss ? 1 : 2, [W(w), SN(s), cheer()]); advance(miss === 0, SCREENS.ispy);
     } else {
       miss++; b.classList.add("bad");
       await A.play(["p_thats", W(w), "p_notquite"], 150); ask();
@@ -444,7 +490,7 @@ SCREENS.blend = (group) => {
   const l = level(), groups = Object.keys(l.words); if (!groups.length) return go("home");
   if (!groups.includes(group)) group = "all";
   const list = group === "all" ? levelWords(l) : l.words[group];
-  const k = St.pick(list.map(([w]) => "word:" + w), { maxNew: 4, ordered: false });
+  const k = pickR(list.map(([w]) => "word:" + w), { maxNew: 4, ordered: false });
   const w = k.slice(5), pic = PICS[w] || "", parts = wordParts(l, w), chunks = !!l.chunks;
   shell(chunks ? "Chunk It" : "Blend It", `<section class="card">
     <div class="levels">${["all", ...groups].map(g => `<button aria-pressed="${g === group}" data-g="${esc(g)}">${g === "all" ? "Mix" : esc(g)}</button>`).join("")}</div>
@@ -474,16 +520,16 @@ SCREENS.blend = (group) => {
   $("#whole").onclick = async () => { tiles.forEach(t => lit(t, true)); await A.play(W(w)); clear(); };
   let soundsDone = false, helped = false;
   $("#snd").onclick = async () => { if (soundsDone) return; soundsDone = true; $("#snd").disabled = true; await award(1, chunks ? "p_chunks" : "p_goodsounds"); };
-  $("#rd").onclick = async () => { $("#pic").textContent = pic || "✅"; St.grade(k, !helped, "blend"); await award(2, [cheer(), W(w)]); await wait(300); SCREENS.blend(group); };
+  $("#rd").onclick = async () => { $("#pic").textContent = pic || "✅"; St.grade(k, !helped, "blend"); await award(2, [cheer(), W(w)]); await wait(300); advance(!helped, () => SCREENS.blend(group)); };
   $("#again").onclick = async () => { helped = true; if (await A.play("p_together")) soundOut(); };
-  $("#skip").onclick = () => SCREENS.blend(group);
+  $("#skip").onclick = () => advance(false, () => SCREENS.blend(group));
 };
 
 // ---------- BUILD A WORD: movable alphabet (syllable tiles from 3rd grade) ----------
 SCREENS.build = () => {
   const l = level(), chunks = !!l.chunks, list = levelWords(l).filter(([w]) => chunks || PICS[w]);
   if (!list.length) return go("home");
-  const k = St.pick(list.map(([w]) => "build:" + w), { ordered: false });
+  const k = pickR(list.map(([w]) => "build:" + w), { ordered: false });
   const w = k.slice(6), parts = wordParts(l, w);
   // spare tiles come from the other words on this planet
   const spare = new Map(); levelWords(l).forEach(([, , ps]) => ps.forEach(p => { if (!parts.some(q => q.d === p.d) && p.clip) spare.set(p.d, p); }));
@@ -498,7 +544,7 @@ SCREENS.build = () => {
   A.preload([W(w), ...tray.map(t => t.clip).filter(Boolean)]);
   const say = () => A.play(["p_build", W(w)], 150);
   say(); $("#hear").onclick = () => A.play(W(w)); $("#pic").onclick = () => A.play(W(w));
-  $("#skip").onclick = () => SCREENS.build();
+  $("#skip").onclick = () => advance(false, SCREENS.build);
   let pos = 0, miss = 0;
   const boxes = [...app.querySelectorAll(".box")];
   $("#hint").onclick = () => { miss++; A.play(parts[pos].clip || "p_silent"); };
@@ -513,7 +559,7 @@ SCREENS.build = () => {
         const idx = parts.map((p, i) => p.clip ? i : -1).filter(i => i >= 0);
         await A.play(idx.map(i => parts[i].clip), 250, j => boxes.forEach((x, i) => x.style.transform = i === idx[j] ? "translateY(-6px)" : ""));
         boxes.forEach(x => x.style.transform = "");
-        await award(miss <= 1 ? 3 : 2, [W(w), cheer()]); await wait(300); SCREENS.build();
+        await award(miss <= 1 ? 3 : 2, [W(w), cheer()]); await wait(300); advance(miss <= 1, SCREENS.build);
       } else if (t.clip) A.play(t.clip);
     } else {
       miss++; b.classList.remove("wiggle"); void b.offsetWidth; b.classList.add("wiggle");
@@ -526,7 +572,7 @@ SCREENS.build = () => {
 SCREENS.match = () => {
   const l = level(), list = levelWords(l).filter(([w]) => PICS[w]);
   if (!list.length) return go("home");
-  const k = St.pick(list.map(([w]) => "match:" + w), { ordered: false });
+  const k = pickR(list.map(([w]) => "match:" + w), { ordered: false });
   const w = k.slice(6), parts = wordParts(l, w);
   const all = Object.keys(PICS).filter(x => x !== w && PICS[x] !== PICS[w]);
   // distractors that look alike (same first or last letter) make it real reading, not guessing
@@ -542,11 +588,11 @@ SCREENS.match = () => {
   tiles.forEach(t => t.onclick = async () => { lit(t, true); await A.play(parts[+t.dataset.i].clip || "p_silent"); lit(t, false); });
   let helped = false, miss = 0;
   $("#help").onclick = async () => { helped = true; await playParts(parts, tiles); tiles.forEach(t => lit(t, false)); };
-  $("#skip").onclick = () => SCREENS.match();
+  $("#skip").onclick = () => advance(false, SCREENS.match);
   app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
     if (b.dataset.w === w) {
       b.classList.add("good"); St.grade(k, !helped && !miss, "match"); St.grade("word:" + w, !helped && !miss);
-      await award(!helped && !miss ? 2 : 1, [W(w), cheer()]); SCREENS.match();
+      await award(!helped && !miss ? 2 : 1, [W(w), cheer()]); advance(!helped && !miss, SCREENS.match);
     } else { miss++; b.classList.add("bad"); await A.play(["p_thats", W(b.dataset.w), "p_notquite"], 150); }
   });
 };
@@ -554,7 +600,7 @@ SCREENS.match = () => {
 // ---------- TRICKY WORDS ----------
 SCREENS.tricky = () => {
   const list = level().tricky; if (!list.length) return go("home");
-  const k = St.pick(list.map(w => "tricky:" + w), { maxNew: 2 });
+  const k = pickR(list.map(w => "tricky:" + w), { maxNew: 2 });
   const w = k.slice(7);
   shell("Tricky Words", `<section class="card">
     <p class="prompt">Tricky word! You can't sound this one out. Do you know it?</p>
@@ -564,15 +610,16 @@ SCREENS.tricky = () => {
       <button class="btn yes big" id="ok">Knew it! +1</button><button class="btn try" id="learn">Learn it</button><button class="btn" id="skip">Skip</button></div></div></section>`);
   const t = $("#t");
   t.onclick = async () => { lit(t, true); await A.play(W(w)); lit(t, false); };
-  $("#ok").onclick = async () => { St.grade(k, true, "tricky"); await award(1); SCREENS.tricky(); };
-  $("#learn").onclick = async () => { St.grade(k, false, "tricky"); lit(t, true); await A.play(["p_thisword", W(w), W(w)], 450); lit(t, false); };
-  $("#skip").onclick = () => SCREENS.tricky();
+  let learned = false;
+  $("#ok").onclick = async () => { St.grade(k, !learned, "tricky"); await award(1); advance(!learned, SCREENS.tricky); };
+  $("#learn").onclick = async () => { learned = true; St.grade(k, false, "tricky"); lit(t, true); await A.play(["p_thisword", W(w), W(w)], 450); lit(t, false); };
+  $("#skip").onclick = () => advance(false, SCREENS.tricky);
 };
 
 // ---------- WORD MEANING (3rd to 5th grade vocabulary) ----------
 SCREENS.vocab = () => {
   const list = level().vocab; if (!list.length) return go("home");
-  const k = St.pick(list.map(([w]) => "vocab:" + w), { ordered: false });
+  const k = pickR(list.map(([w]) => "vocab:" + w), { ordered: false });
   const w = k.slice(6), [, def] = list.find(([x]) => x === w);
   const opts = St.shuffle([[w, def], ...St.sample(list.filter(([x]) => x !== w), 2)]);
   shell("Word Meaning", `<section class="card">
@@ -583,13 +630,13 @@ SCREENS.vocab = () => {
   const t = $("#t"), hearWord = async () => { lit(t, true); await A.play(W(w)); lit(t, false); };
   t.onclick = hearWord; $("#hear").onclick = hearWord;
   A.play(["p_meaning"]);
-  $("#skip").onclick = () => SCREENS.vocab();
+  $("#skip").onclick = () => advance(false, SCREENS.vocab);
   app.querySelectorAll(".say").forEach(b => b.onclick = () => A.play("d_" + D.slug(b.dataset.say)));
   let miss = 0;
   app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
     if (b.dataset.w === w) {
       b.classList.add("good"); St.grade(k, !miss, "vocab");
-      await award(miss ? 1 : 2, [W(w), "d_" + D.slug(w), cheer()]); SCREENS.vocab();
+      await award(miss ? 1 : 2, [W(w), "d_" + D.slug(w), cheer()]); advance(!miss, SCREENS.vocab);
     } else { miss++; b.classList.add("bad"); await A.play("p_notquite"); }
   });
 };
@@ -661,6 +708,8 @@ SCREENS.story = (id) => {
         const lw = levelWords(D.READING[st.level]);
         helpWords.forEach(w => { if (lw.some(([x]) => x === w)) St.grade("word:" + w, false); });
         St.storyRead(st.id); St.today().acts.stories = (St.today().acts.stories || 0) + 1;
+        const mine = D.STORIES.filter(x => x.level === st.level), read = mine.filter(x => St.S.stories[x.id]).length;
+        St.setBest(`reading:${st.level}:stories`, read >= mine.length ? 3 : Math.min(2, read));
         confetti(120); await award(5, [answerClip(st, 0), "p_finished"]);
         go("stories");
       } else { b.classList.add("bad"); await A.play(["p_thats", answerClip(st, i), "p_notquite"], 150); }
@@ -680,7 +729,7 @@ function practice(sub, id) {
   if (sub === "math" && id === "numcards") return numberCards(g);
   if (sub === "math" && id === "tracenum") return traceNumber(g);
   const keys = sk.keys ? sk.keys(g) : null;
-  const key = keys ? St.pick(keys, { maxNew: 4 }) : `${sub === "math" ? "m" : "g"}:${id}:${g}`;
+  const key = keys ? pickR(keys, { maxNew: 4 }) : (roundSize(), `${sub === "math" ? "m" : "g"}:${id}:${g}`);
   const p = sk.gen(g, keys ? key : null);
   shell(entry[2] || sk.name, `<section class="card math">
     <p class="prompt big">${p.q}</p>
@@ -691,12 +740,12 @@ function practice(sub, id) {
     <div class="row"><button class="btn" id="hear">🔊 Hear it</button><button class="btn" id="skip">Skip</button></div></section>`);
   const ask = () => A.play(p.say, 90);
   const again = () => practice(sub, id);
-  ask(); $("#hear").onclick = ask; $("#skip").onclick = again;
+  ask(); $("#hear").onclick = ask; $("#skip").onclick = () => advance(false, again);
   let miss = 0, busy = false;
   const right = async () => {
     busy = true; const first = miss === 0;
     St.grade(key, first, sub); if (first) St.mathRight(g, sub);
-    await award(first ? 2 : 1, [...(p.after || []), cheer()].filter(Boolean)); await wait(250); again();
+    await award(first ? 2 : 1, [...(p.after || []), cheer()].filter(Boolean)); await wait(250); advance(first, again);
   };
   // after two misses, show the answer and move on: no stars lost, and it comes back sooner
   const reveal = async () => {
@@ -704,7 +753,7 @@ function practice(sub, id) {
     const row = document.createElement("div"); row.className = "reveal";
     row.innerHTML = `<p>The answer is <b>${p.choices ? p.choices.find(c => c.v === p.ans).html : esc(p.ans)}</b></p><button class="btn yes big" id="nextq">Next →</button>`;
     app.querySelector(".card").appendChild(row);
-    $("#nextq").onclick = again;
+    $("#nextq").onclick = () => advance(false, again);
     await A.play(["p_answeris", ...(p.after || M.N(+p.ans))], 90);
   };
   if (p.choices) {
@@ -745,7 +794,7 @@ function practice(sub, id) {
 
 // Number cards: the Montessori three-period lesson with numerals and quantities
 function numberCards(g) {
-  const keys = M.SK.numcards.keys(g), k = St.pick(keys), n = +k.split(":")[2], it = St.item(k);
+  const keys = M.SK.numcards.keys(g), k = pickR(keys), n = +k.split(":")[2], it = St.item(k);
   const period = !it.seen ? 1 : (it.box >= 2 ? (Math.random() < .65 ? 3 : 2) : (Math.random() < .6 ? 2 : 3));
   const pool = keys.map(x => +x.split(":")[2]), e = M.EMOJI[n % M.EMOJI.length];
   shell("Number Cards", `<section class="card" id="card"></section>`);
@@ -765,7 +814,7 @@ function numberCards(g) {
     $("#again").onclick = ask; ask();
     let miss = 0;
     card.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-      if (+b.dataset.n === n) { b.classList.add("good"); St.grade(k, !miss, "math"); if (!miss) St.mathRight(g); await award(miss ? 1 : 2, ["n_" + n, cheer()]); fromP1 ? p3() : next(); }
+      if (+b.dataset.n === n) { b.classList.add("good"); St.grade(k, !miss, "math"); if (!miss) St.mathRight(g); await award(miss ? 1 : 2, ["n_" + n, cheer()]); fromP1 ? p3() : advance(!miss, next); }
       else { miss++; b.classList.add("bad"); await A.play(["n_" + b.dataset.n, "p_notquite"], 200); ask(); }
     });
   }
@@ -774,14 +823,15 @@ function numberCards(g) {
       <div class="grown"><p>Grown-up taps</p><div class="row">
         <button class="btn yes big" id="ok">Said it! +1</button><button class="btn try" id="help">Help me</button><button class="btn" id="skip">Skip</button></div></div>`;
     A.play("m_whatnum"); $("#t").onclick = say;
-    $("#ok").onclick = async () => { St.grade(k, true, "math"); St.mathRight(g); await award(1); next(); };
-    $("#help").onclick = () => { St.grade(k, false, "math"); A.play(["p_thisis", "n_" + n], 150); };
-    $("#skip").onclick = next;
+    let helped = false;
+    $("#ok").onclick = async () => { St.grade(k, !helped, "math"); St.mathRight(g); await award(1); advance(!helped, next); };
+    $("#help").onclick = () => { helped = true; St.grade(k, false, "math"); A.play(["p_thisis", "n_" + n], 150); };
+    $("#skip").onclick = () => advance(false, next);
   }
 }
 // Sandpaper numerals
 function traceNumber(g) {
-  const k = St.pick(M.SK.tracenum.keys(g)), n = k.split(":")[2];
+  const k = pickR(M.SK.tracenum.keys(g)), n = k.split(":")[2];
   traceScreen({ title: "Trace Numbers", prompt: "Trace the number with your finger. Say its name as you trace.", disp: n, vowel: true,
     kw: +n ? M.objs(+n, M.EMOJI[n % M.EMOJI.length]) : "", say: ["m_tracenum", "n_" + n], hear: ["n_" + n], clip: "n_" + n, skipLabel: "Next number",
     done: async () => { St.grade(k, true, "math"); St.mathRight(g); await award(1, ["n_" + n, cheer()]); }, next: () => traceNumber(g) });
@@ -812,7 +862,9 @@ SCREENS.progress = () => {
   const meter = (name, n, of, col) => `<div class="lvrow"><span>${name}</span><div class="meter"><i style="width:${Math.min(1, n / of) * 100}%;background:${col}"></i></div><span>${n}/${of}</span></div>`;
   const lvRows = D.GRADES.filter(g => g.id !== "prek").map(g => { const l = D.READING[g.id], ws = [...levelWords(l).map(x => x[0]), ...l.vocab.map(v => v[0])];
     return meter(`${g.label} · ${g.planet}`, ws.filter(wordKnown).length, ws.length, g.color); }).join("");
-  const rightRows = sub => D.GRADES.filter(g => St.isOpen(sub, g.id)).map(g => meter(`${g.label} · ${g.planet}`, St.rightCount(sub, g.id), UNLOCK[sub], g.color)).join("");
+  // activities checked off (2+ stars) on each open planet, against what opens the next one
+  const actRows = sub => D.GRADES.filter(g => St.anyLesson(sub, g.id)).map(g => meter(`${g.label} · ${g.planet}`, doneCount(sub, g.id), lessons(sub, g.id).length, g.color)).join("");
+  const actNote = `Activities checked off (★★ or better in a round) on each planet. About 70% of them opens the next planet.`;
   const facts = Object.keys(S.items).filter(k => /^m:(add|sub|mul|div):/.test(k));
   const tricky = D.TRICKY.filter(w => St.mastered("tricky:" + w));
   const subOf = k => k.startsWith("m:") ? "math" : k.startsWith("g:") ? "geo" : "reading";
@@ -834,12 +886,13 @@ SCREENS.progress = () => {
     <div class="panel"><h3>📖 Letter sounds</h3>
       <div class="soundgrid">${allSounds.map(s => `<div class="sg ${cls(s)}">${D.SOUNDS[s][0]}</div>`).join("")}</div>
       <div class="legend"><span style="--c:#F1F4FB">Not tried</span><span style="--c:#FFF1C9">Started</span><span style="--c:#FFE08A">Learning</span><span style="--c:#CFF2DC">Knows it</span></div></div>
+    <div class="panel"><h3>📖 Reading activities</h3><p>${actNote}</p>${actRows("reading")}</div>
     <div class="panel"><h3>📖 Words read</h3>${lvRows}
       <p>Tricky words known: ${tricky.length}/${D.TRICKY.length}${tricky.length ? " · " + tricky.map(esc).join(", ") : ""}</p></div>
     <div class="panel"><h3>📖 Stories read</h3><div class="chips">${storyList}</div></div>
-    <div class="panel"><h3>🔢 Math</h3><p>Answers right on the first try, per grade. ${MATH_UNLOCK} opens the next planet.</p>${rightRows("math")}
+    <div class="panel"><h3>🔢 Math</h3><p>${actNote}</p>${actRows("math")}
       <p>Math facts mastered: ${facts.filter(k => St.mastered(k)).length} of ${facts.length} practiced.</p></div>
-    <div class="panel"><h3>🌍 Geography</h3><p>Answers right on the first try, per grade. ${UNLOCK.geo} opens the next planet.</p>${rightRows("geo")}
+    <div class="panel"><h3>🌍 Geography</h3><p>${actNote}</p>${actRows("geo")}
       <p>Places and facts mastered: ${Object.keys(S.items).filter(k => k.startsWith("g:") && St.mastered(k)).length}.</p></div>
     ${weak.length || weakMath.length || weakGeo.length ? `<div class="panel"><h3>Needs more practice</h3><p>These come up more often until they stick.</p>
       ${weak.length ? `<div class="chips">${weak.map(w => `<span class="chip">📖 ${esc(w)}</span>`).join("")}</div>` : ""}
@@ -856,7 +909,7 @@ SCREENS.progress = () => {
         <li><b>Three steps (Montessori):</b> Sound Cards and Number Cards teach "This is…", then "Show me…", then "What is this?"</li>
         <li><b>Colours:</b> vowels are blue and consonants red, like the Montessori movable alphabet. Silent letters are grey.</li>
         <li><b>Mistakes are fine:</b> wrong taps play their own sound so the difference can be heard. After two misses in math the answer is shown. Misses never take stars away.</li>
-        <li><b>Unlocking:</b> a reading planet opens when enough words on the one before are known; a math planet opens after ${MATH_UNLOCK} first-try answers, a geography planet after ${UNLOCK.geo}. Starting higher? Unlock a grade below.</li>
+        <li><b>Rounds and unlocking:</b> each activity is played in rounds of 10 questions (6 on Pre-K and K), with no repeats inside a round. A round earns up to 3 stars; 2 stars checks the activity off. When about 70% of a planet's activities are checked off, the next planet opens. Replays only add bonus stars when they beat the best score. Starting higher? Unlock a grade below.</li>
         <li>Each child's progress is saved on this device; "Back up progress" moves it to another one. On an iPhone or iPad, tap Share → Add to Home Screen to open it like an app.</li>
       </ul>
     </div>
