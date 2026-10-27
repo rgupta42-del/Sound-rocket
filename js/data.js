@@ -237,5 +237,23 @@ window.DATA = (() => {
     round:"Round complete! Great job!", round3:"Three stars! Amazing!", roundbest:"Round complete! New best score!", roundtry:"Round complete! Play again to earn more stars."
   };
 
-  return { GRADES, SOUNDS, SOUND_CLIP, PINK_SOUNDS, GREEN_SOUNDS, LONG_SOUNDS, VOWELS, PHONOGRAMS, READING, TRICKY, TRICKY_BY, VOCAB, STORIES, PHRASES, tiles, slug };
+
+  // Reading activities: id -> [icon, name, what it is, note for grown-ups]
+  const ACTS = {
+    sounds: ["🔤", "Sound Cards", "Learn a sound, find it, say it", "Montessori 3-step lesson"],
+    trace: ["✍️", "Trace It", "Trace the letter and say its sound", "Sandpaper letters"],
+    ispy: ["🔭", "I Spy", "Find what starts with the sound", "Listening game"],
+    blend: ["🧩", "Blend It", "Sound out words, then read them", "With a grown-up"],
+    build: ["🛠️", "Build a Word", "Hear a word, build it with letters", "Movable alphabet"],
+    match: ["🖼️", "Read & Match", "Read the word, pick the picture", "Reads alone"],
+    tricky: ["⭐", "Tricky Words", "Words you just know by sight", "With a grown-up"],
+    vocab: ["💬", "Word Meaning", "Read a word, pick what it means", "Vocabulary"],
+    stories: ["📖", "Storybook", "Read a little story yourself", "Stories and questions"]
+  };
+  // 3rd grade and up read in syllable chunks instead of letter sounds
+  const CHUNK_ACTS = {
+    blend: ["🧩", "Chunk It", "Read big words chunk by chunk", "With a grown-up"],
+    build: ["🛠️", "Build a Word", "Put the word's chunks in order", "Syllable tiles"]
+  };
+  return { ACTS, CHUNK_ACTS, GRADES, SOUNDS, SOUND_CLIP, PINK_SOUNDS, GREEN_SOUNDS, LONG_SOUNDS, VOWELS, PHONOGRAMS, READING, TRICKY, TRICKY_BY, VOCAB, STORIES, PHRASES, tiles, slug };
 })();

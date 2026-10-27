@@ -17,6 +17,11 @@ D.STORIES.forEach(s=>{
   sentences["q_"+s.id]=s.q[0];
   s.q[1].forEach(([w],i)=>{ if(/^[a-z]+$/i.test(w)) addW(w); else sentences[`ans_${s.id}_${i}`]=w; });
 });
-fs.writeFileSync(__dirname+"/clips.json",JSON.stringify({sounds:Object.keys(D.SOUNDS),words,stretched,chunks,sentences,phrases,defs,math,geo},null,1));
+// spoken names of subjects and activities (Pre-K and K hear a card's name on the first tap)
+const labels={}, addL=n=>{labels["lbl_"+D.slug(n)]=n};
+["Reading","Math","Geography"].forEach(addL);
+[...Object.values(D.ACTS),...Object.values(D.CHUNK_ACTS)].forEach(a=>addL(a[1]));
+for(const P of [M,window.GEO]) for(const list of Object.values(P.GRADE_SKILLS)) list.forEach(([id,,name])=>addL(name||P.SK[id].name));
+fs.writeFileSync(__dirname+"/clips.json",JSON.stringify({sounds:Object.keys(D.SOUNDS),words,stretched,chunks,sentences,phrases,defs,math,geo,labels},null,1));
 console.log(Object.keys(words).length,"words",Object.keys(stretched).length,"stretched",Object.keys(chunks).length,"chunks",Object.keys(sentences).length,"sentences",
-  Object.keys(phrases).length,"phrases",Object.keys(defs).length,"meanings",Object.keys(math).length,"math",Object.keys(geo).length,"geography");
+  Object.keys(phrases).length,"phrases",Object.keys(defs).length,"meanings",Object.keys(math).length,"math",Object.keys(geo).length,"geography",Object.keys(labels).length,"labels");

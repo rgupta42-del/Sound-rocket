@@ -5,7 +5,8 @@ A reading, math and geography game from Pre-K to 5th grade. Open it at **https:/
 ## For families
 Share the link with anyone. Each family's progress stays on their own phone or tablet; nothing is sent anywhere.
 - **A player per child:** the first visit asks for the child's name, a picture, and which grade to start reading, math and geography at (any grade from Pre-K to 5th; earlier grades stay open for review). Add more children from the home screen and switch between them.
-- **Grown-up controls** (Progress page, per child, hold buttons for 2 seconds): move to any grade, open every planet, unlock a single lesson, rename, start over, remove, back up progress to a file and restore it on another device, and a sound check.
+- **Grown-ups area** (press and hold 👪 at the bottom of the home screen for 2 seconds, so children don't wander in): **This week** shows minutes, rounds finished, accuracy, streak, what the child needs help with and what they finished, with per-subject details below; **Settings** moves the child to any grade, opens every planet or a single lesson, renames, backs up and restores, starts over or removes; **Help** has the tips, a sound check and a share button.
+- **For children:** the big **▶ Play** button starts the next unfinished activity, so there's nothing to choose. On Pre-K and K, the first tap on a card or subject says its name out loud and the second tap opens it, so children who can't read yet can still find their way.
 
 ## What's in it
 Reading, Math and Geography share seven planets, one per grade. Switch subjects with the 📖 Reading / 🔢 Math / 🌍 Geography tabs on the home screen; each subject unlocks its planets separately, and stars, the rocket and the daily mission are shared.
@@ -39,7 +40,7 @@ Math activities include Number Cards (three-period lesson), Trace Numbers (sandp
 
 Practice is chosen by spaced repetition: nothing repeats back-to-back, missed items come back sooner, mastered ones less often, and new items (letter sounds in Montessori order, math facts from easiest) come in a couple at a time.
 
-The **Progress** page shows stars and minutes per day for two weeks (split into reading and math), a daily goal of 20 stars, streaks, which letter sounds he knows, words mastered per grade, stories read, math progress per grade, and items that need more practice. Progress is stored on the device (browser storage), separately for each child; progress from the earlier three-planet version carries over (Moon Base words count as K, Mars and Saturn as 1st grade).
+The grown-ups area shows stars and minutes per day for two weeks (split into reading and math), a daily goal of 20 stars, streaks, which letter sounds he knows, words mastered per grade, stories read, math progress per grade, and items that need more practice. Progress is stored on the device (browser storage), separately for each child; progress from the earlier three-planet version carries over (Moon Base words count as K, Mars and Saturn as 1st grade).
 
 ## Files
 - `index.html`, `css/style.css`, `js/*.js`: the game (no build step)

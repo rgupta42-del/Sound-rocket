@@ -7,7 +7,7 @@ with only a trace of vowel, the way phonics teachers say them.
 
 Usage: python3 tools/build_audio.py /path/to/voice_dir [section ...] [--force]
   voice_dir holds en-us-lessac-medium.onnx plus durA.onnx/durB.onnx (see make_models()).
-  Sections: sounds long words stretched chunks sentences phrases defs math geo (default: all).
+  Sections: sounds long words stretched chunks sentences phrases defs math geo labels (default: all).
   Clips that already exist are kept; --force rebuilds them too.
 """
 import json, os, shutil, subprocess, sys, wave
@@ -208,6 +208,9 @@ def main():
     if run("math"):
         for k, t in C.get("math", {}).items():
             if want(k): save(k, say(t, 1.05 if k.startswith("m_") else 1.1))
+    if run("labels"):
+        for k, t in C.get("labels", {}).items():
+            if want(k): save(k, say(t + "!", 1.0))
     if run("geo"):
         for k, t in C.get("geo", {}).items():
             if want(k): save(k, say(t, 1.05))
