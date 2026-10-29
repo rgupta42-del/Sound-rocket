@@ -65,7 +65,7 @@ window.READGAMES = (() => {
       const w = key.split(":")[2], parts = D.tiles(w), n = parts.length;
       const opts = [2, 3, 4, 5].filter(x => x !== n).slice(0, 2).concat(n).sort();
       return { q: `How many sounds do you hear in <b>${w}</b>?`, say: ["p_howmanysounds", W(w)],
-        vis: `${big(PIC2[w])}<div class="soundboxes">${parts.map(() => "<i></i>").join("")}</div>`, ans: String(n),
+        vis: big(PIC2[w]), ans: String(n),
         choices: opts.map(c => ({ v: String(c), html: `<span class="boxrow">${"<i></i>".repeat(c)}</span>${c}`, say: ["n_" + c] })),
         // the answer is shown as the word in its boxes, one sound each, while the sounds play
         after: [...parts.map(SN), W(w)], reveal: `<div class="soundboxes full">${parts.map(p => `<i class="${isVowel(p) ? "v" : "c"}">${p}</i>`).join("")}</div>` };

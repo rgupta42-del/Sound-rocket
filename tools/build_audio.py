@@ -25,9 +25,16 @@ want = lambda name: FORCE or not os.path.exists(os.path.join(OUT, name + ".mp3")
 F = 240   # 10 ms frames
 
 def tts(text, speed=0.92):
+    for carrier in ("Okay... ", "Alright then... "):
+        try: return _tts(carrier, text, speed)
+        except RuntimeError: pass
+    print("  no pause found, kept as is:", text, flush=True)
+    return K.create(text, voice=VOICE, speed=speed, lang="en-us")[0].astype(np.float64)
+
+def _tts(carrier, text, speed):
     """Kokoro adds a stray "uh" syllable before short inputs, so every clip is said after a pause
     ("Okay... cat.") and only what follows the pause is kept."""
-    x, sr = K.create("Okay... " + text, voice=VOICE, speed=speed, lang="en-us")
+    x, sr = K.create(carrier + text, voice=VOICE, speed=speed, lang="en-us")
     assert sr == SR
     x = x.astype(np.float64)
     db = 20 * np.log10(rms(x) + 1e-9); quiet = db < db.max() - 35; run = 0
