@@ -32,7 +32,7 @@ window.MATH = (() => {
 
   // Math prompts (clip name -> text)
   const PHRASES = {
-    m_howmany:"How many?", m_whatnum:"What number is this?", m_tracenum:"Trace the number with your finger. Say its name.",
+    m_howmany:"How many?", m_quicklook:"Quick look! How many did you see?", m_numline:"What number is the arrow pointing to?", m_make:"make", m_whichmany:"Which group has this many?", m_whatnum:"What number is this?", m_tracenum:"Trace the number with your finger. Say its name.",
     m_more:"Which group has more?", m_fewer:"Which group has fewer?", m_bigger:"Which number is bigger?", m_smaller:"Which number is smaller?",
     m_sign:"Which sign goes in the middle?", m_greater:"is greater than", m_less:"is less than", m_equal:"is equal to",
     m_next:"What comes next?", m_whatis:"What is", m_plus:"plus", m_minus:"minus", m_times:"times", m_divby:"divided by", m_equals:"equals",
@@ -414,13 +414,48 @@ window.MATH = (() => {
       return { q:"Use the order of operations.", say:["m_order"], vis:eq(`${s} = <span class="blank">?</span>`), ans:String(v), pad:{}, after:["p_answeris", ...N(v)] };
     } };
 
+  // Quick Look (subitizing): dots flash for a moment, then "how many did you see?" Small amounts in dice
+  // patterns, bigger ones in ten frames, so children learn to see amounts without counting one by one.
+  const DICE = { 1:[[1,1]], 2:[[0,0],[2,2]], 3:[[0,0],[1,1],[2,2]], 4:[[0,0],[0,2],[2,0],[2,2]], 5:[[0,0],[0,2],[1,1],[2,0],[2,2]], 6:[[0,0],[1,0],[2,0],[0,2],[1,2],[2,2]] };
+  const dice = n => `<div class="dice">${Array.from({ length: 9 }, (_, i) => `<span>${DICE[n].some(([r, c]) => r * 3 + c === i) ? "<i></i>" : ""}</span>`).join("")}</div>`;
+  SK.quicklook = { name:"Quick Look", ico:"👀", tag:"Seeing amounts (subitizing)",
+    keys: g => range(1, g === "prek" ? 5 : 10).map(n => "m:ql:" + n),
+    gen(g, key) {
+      const n = +key.split(":")[2], pic = n <= 6 && Math.random() < .7 ? dice(n) : tenFrame(n);
+      return { q:"Quick look! How many did you see?", say:["m_quicklook"],
+        vis:`<button class="flash" aria-label="Look again" onclick="this.classList.remove('flash');void this.offsetWidth;this.classList.add('flash')">${pic}</button><small class="hint">Tap the box to look again</small>`,
+        ans:String(n), choices:near(n, g === "prek" ? 3 : 4, 2, 1), after:N(n) };
+    } };
+  // Number bonds: a whole and its two parts; one is missing
+  SK.bonds = { name:"Number Bonds", ico:"🔗", tag:"Part-part-whole",
+    keys: g => { const k = []; for (let w = g === "k" ? 3 : 6; w <= (g === "k" ? 10 : 20); w++) for (let a = 0; a <= w; a++) if (g !== "k" || w <= 10) k.push(`m:bond:${w}-${a}`); return k.filter((_, i) => g === "k" || i % 2 === 0); },
+    gen(g, key) {
+      const [w, a] = key.split(":")[2].split("-").map(Number), b = w - a, hide = one(["whole", "part"]);
+      const ans = hide === "whole" ? w : b, cell = (v, top) => `<span class="bond ${top ? "top" : ""}">${v}</span>`;
+      const vis = `<div class="bonds">${cell(hide === "whole" ? `<span class="blank">?</span>` : w, true)}<div class="parts">${cell(a)}${cell(hide === "part" ? `<span class="blank">?</span>` : b)}</div></div>`;
+      return { q: hide === "whole" ? "The parts make the whole. What is the whole?" : "The parts make the whole. What is the missing part?", say:["m_missing"], vis, ans:String(ans),
+        ...(g === "k" ? { choices:near(ans, 3, 2, 0) } : { pad:{} }), after:[...N(a), "m_and", ...N(b), "m_make", ...N(w)] };
+    } };
+  // Number line: where is the arrow?
+  SK.numline = { name:"Number Line", ico:"📏", tag:"Numbers in order",
+    gen(g) {
+      const [max, step, lab] = g === "k" ? [10, 1, 5] : g === "g1" ? [20, 1, 5] : [100, 10, 50];
+      // 2nd grade lands on fives along a 0-100 line; younger grades on any whole number
+      const target = g === "g2" ? ri(1, 19) * 5 : ri(1, max - 1), x = v => 20 + v / max * 300;
+      const ticks = range(0, max / step).map(i => i * step).map(v => `<line x1="${x(v)}" y1="${v % lab ? 34 : 28}" x2="${x(v)}" y2="${v % lab ? 46 : 52}" stroke="#17203F" stroke-width="${v % lab ? 2 : 3}"/>${v % lab ? "" : `<text x="${x(v)}" y="72" text-anchor="middle" font-size="15" font-weight="700" fill="#17203F">${v}</text>`}`).join("");
+      const minor = g === "g2" ? range(0, 20).map(i => i * 5).filter(v => v % 10).map(v => `<line x1="${x(v)}" y1="36" x2="${x(v)}" y2="44" stroke="#5A6688" stroke-width="1.5"/>`).join("") : "";
+      const vis = `<svg class="nline big" viewBox="0 0 340 80" role="img" aria-label="number line"><line x1="20" y1="40" x2="320" y2="40" stroke="#17203F" stroke-width="3"/>${ticks}${minor}
+        <path d="M${x(target)} 26 l-9 -14 h18 z" fill="#DC3B3B"/></svg>`;
+      return { q:"What number is the arrow pointing to?", say:["m_numline"], vis, ans:String(target), choices:numChoices([...new Set([target, target + (g === "g2" ? 5 : 1), target - (g === "g2" ? 5 : 1), target + (g === "g2" ? 10 : 2)])].filter(v => v >= 0 && v <= max).slice(0, 3)), after:N(target) };
+    } };
+
   // The skills each grade shows: [skill, short description, name override]
   const GRADE_SKILLS = {
-    prek:[["numcards", "Numbers 0 to 10"], ["tracenum", "Trace 0 to 9"], ["count", "Count up to 10 things"], ["compare", "Which group has more?"], ["shapes", "Circle, square, triangle"], ["pattern", "What comes next?"]],
-    k:[["numcards", "Numbers 0 to 20"], ["tracenum", "Trace 0 to 20"], ["count", "Count up to 20 things"], ["add", "Add within 10 with pictures"], ["sub", "Take away within 10"],
-      ["make10", "How many more make 10?"], ["compare", "Which number is bigger?"], ["shapes", "Flat and solid shapes"], ["pattern", "Trickier patterns"]],
-    g1:[["add", "Add within 20"], ["sub", "Subtract within 20"], ["make10", "Make 10 fast"], ["placevalue", "Tens and ones"], ["compare", "Greater than, less than"], ["time", "Hour and half hour"]],
-    g2:[["add", "Add 2-digit numbers"], ["sub", "Subtract 2-digit numbers"], ["placevalue", "Hundreds, tens and ones"], ["skip", "Count by 2s, 5s, 10s, 100s"],
+    prek:[["numcards", "Numbers 0 to 10"], ["quicklook", "See up to 5 at a glance"], ["count", "Count up to 10 things"], ["tracenum", "Trace 0 to 9"], ["compare", "Which group has more?"], ["shapes", "Circle, square, triangle"], ["pattern", "What comes next?"]],
+    k:[["numcards", "Numbers 0 to 20"], ["quicklook", "See up to 10 at a glance"], ["count", "Count up to 20 things"], ["bonds", "Parts that make 3 to 10"], ["add", "Add within 10 with pictures"], ["sub", "Take away within 10"],
+      ["make10", "How many more make 10?"], ["numline", "Number line 0 to 10"], ["compare", "Which number is bigger?"], ["tracenum", "Trace 0 to 20"], ["shapes", "Flat and solid shapes"], ["pattern", "Trickier patterns"]],
+    g1:[["add", "Add within 20"], ["sub", "Subtract within 20"], ["bonds", "Number bonds to 20"], ["make10", "Make 10 fast"], ["placevalue", "Tens and ones"], ["numline", "Number line 0 to 20"], ["compare", "Greater than, less than"], ["time", "Hour and half hour"]],
+    g2:[["add", "Add 2-digit numbers"], ["sub", "Subtract 2-digit numbers"], ["placevalue", "Hundreds, tens and ones"], ["skip", "Count by 2s, 5s, 10s, 100s"], ["numline", "Number line 0 to 100"],
       ["evenodd", "Even or odd?"], ["money", "Count coins"], ["time", "Time to 5 minutes"], ["compare", "Compare 3-digit numbers"]],
     g3:[["mult", "Times tables to 10 × 10"], ["div", "Division facts"], ["fractions", "Name the fraction"], ["round", "Round to 10 and 100"],
       ["area", "Area with squares"], ["time", "Time to the minute"], ["add", "Add 3-digit numbers"], ["sub", "Subtract 3-digit numbers"]],

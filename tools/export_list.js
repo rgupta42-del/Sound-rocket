@@ -1,7 +1,7 @@
 // Writes tools/clips.json: every clip the game needs, for build_audio.py
-global.window={}; require("../js/data.js"); require("../js/math.js"); require("../js/geo-maps.js"); require("../js/geo.js"); const D=window.DATA, M=window.MATH; const fs=require("fs");
+global.window={}; require("../js/data.js"); require("../js/math.js"); require("../js/geo-maps.js"); require("../js/geo.js"); require("../js/reading-games.js"); const D=window.DATA, M=window.MATH; const fs=require("fs");
 const key=w=>"w_"+(w==="I"?"cap_i":w.toLowerCase().replace(/[^a-z]/g,""));
-const words={}, stretched={}, chunks={}, sentences={}, phrases={...D.PHRASES}, defs={}, math=M.clips(), geo=window.GEO.clips();
+const words={}, stretched={}, chunks={}, sentences={}, phrases={...D.PHRASES,...window.READGAMES.PHRASES}, defs={}, math=M.clips(), geo=window.GEO.clips();
 const addW=w=>{words[key(w)]=w};
 Object.values(D.READING).forEach(l=>Object.values(l.words).flat().forEach(([w,,parts])=>{
   addW(w);
@@ -10,6 +10,7 @@ Object.values(D.READING).forEach(l=>Object.values(l.words).flat().forEach(([w,,p
 }));
 Object.values(D.SOUNDS).forEach(([,kw])=>addW(kw));
 D.TRICKY.forEach(addW);
+window.READGAMES.words().forEach(addW);
 Object.values(D.VOCAB).flat().forEach(([w,d])=>{addW(w);defs["d_"+D.slug(w)]=d;});
 D.STORIES.forEach(s=>{
   sentences["title_"+s.id]=s.title;
@@ -21,7 +22,7 @@ D.STORIES.forEach(s=>{
 const labels={}, addL=n=>{labels["lbl_"+D.slug(n)]=n};
 ["Reading","Math","Geography"].forEach(addL);
 [...Object.values(D.ACTS),...Object.values(D.CHUNK_ACTS)].forEach(a=>addL(a[1]));
-for(const P of [M,window.GEO]) for(const list of Object.values(P.GRADE_SKILLS)) list.forEach(([id,,name])=>addL(name||P.SK[id].name));
+for(const P of [M,window.GEO,{GRADE_SKILLS:{all:Object.keys(window.READGAMES.SK).map(id=>[id])},SK:window.READGAMES.SK}]) for(const list of Object.values(P.GRADE_SKILLS)) list.forEach(([id,,name])=>addL(name||P.SK[id].name));
 fs.writeFileSync(__dirname+"/clips.json",JSON.stringify({sounds:Object.keys(D.SOUNDS),words,stretched,chunks,sentences,phrases,defs,math,geo,labels},null,1));
 console.log(Object.keys(words).length,"words",Object.keys(stretched).length,"stretched",Object.keys(chunks).length,"chunks",Object.keys(sentences).length,"sentences",
   Object.keys(phrases).length,"phrases",Object.keys(defs).length,"meanings",Object.keys(math).length,"math",Object.keys(geo).length,"geography",Object.keys(labels).length,"labels");

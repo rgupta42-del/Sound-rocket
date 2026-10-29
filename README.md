@@ -5,8 +5,8 @@ A reading, math and geography game from Pre-K to 5th grade. Open it at **https:/
 ## For families
 Share the link with anyone. Each family's progress stays on their own phone or tablet; nothing is sent anywhere.
 - **A player per child:** the first visit asks for the child's name, a picture, and which grade to start reading, math and geography at (any grade from Pre-K to 5th; earlier grades stay open for review). Add more children from the home screen and switch between them.
-- **Grown-ups area** (press and hold 👪 at the bottom of the home screen for 2 seconds, so children don't wander in): **This week** shows minutes, rounds finished, accuracy, streak, what the child needs help with and what they finished, with per-subject details below; **Settings** moves the child to any grade, opens every planet or a single lesson, renames, backs up and restores, starts over or removes; **Help** has the tips, a sound check and a share button.
-- **For children:** the card marked **▶ Next** (it glows) is the next unfinished activity, so there's always an obvious thing to play. The rocket at the top fills with today's stars: 20 completes the daily mission and it blasts off, every 20 after that is a bonus blast-off, and 🔥 shows the streak. Big moments get a celebration: mission complete, a new planet, an activity checked off, a 3-star round and streaks of 3, 7, 14, 30 days and more. On Pre-K and K, the first tap on an activity card says its name out loud and the second tap opens it (subject tabs switch on one tap and say their name), so children who can't read yet can still find their way.
+- **Grown-ups area** (tap 👪 at the bottom of the home screen): **This week** shows minutes, rounds finished, accuracy, streak, what the child needs help with and what they finished, with per-subject details below; **🔓 Unlock everything** at the top opens every planet and lesson in one tap; **Settings** moves the child to any grade, opens every planet or a single lesson, renames, backs up and restores, starts over or removes; **Help** has the tips, a sound check and a share button.
+- **For children:** the card marked **▶ Next** (it glows) is the next unfinished activity, so there's always an obvious thing to play. The rocket at the top fills with today's stars: 20 completes the daily mission and it blasts off, every 20 after that is a bonus blast-off, and 🔥 shows the streak. Big moments get a celebration: mission complete, a new planet, an activity checked off, a 3-star round and streaks of 3, 7, 14, 30 days and more. Everything opens with one tap, and every question is read out loud, so children who can't read yet can still play.
 
 ## What's in it
 Reading, Math and Geography share seven planets, one per grade. Switch subjects with the 📖 Reading / 🔢 Math / 🌍 Geography tabs on the home screen; each subject unlocks its planets separately, and stars, the rocket (today's mission) and the streak are shared.
@@ -26,17 +26,18 @@ Reading, Math and Geography share seven planets, one per grade. Switch subjects 
 **Planets** open when about 70% of the activities on the one before are checked off. The home screen's **Next planet** bar shows how many are done, and **❓ How to play** explains the game (it opens on its own the first time a player is set up). A grown-up can unlock any grade on the Progress page.
 
 Reading activities:
-- **Sound Cards:** Montessori three-period lesson: "This is…", "Show me…", "What is this?"
+- **Sound Cards:** Montessori three-period lesson: "This is…", "Show me…", then "Which picture starts with this sound?"
+- **Rhyme Time, Clap It, Sound Boxes, Last Sound:** listening games (rhymes, syllables, counting the sounds in a word with Elkonin boxes, ending sounds) that build the phonemic awareness reading rests on
 - **Trace It:** sandpaper-letter tracing while saying the sound
 - **I Spy:** pick the picture that starts with a sound
-- **Blend It / Chunk It:** sound out a word tile by tile (or chunk by chunk from 3rd grade), with a grown-up checking
+- **Blend It / Chunk It:** sound out a word tile by tile (or chunk by chunk from 3rd grade), by picking its picture; a "Sound it out for me" button models the blending
 - **Build a Word:** movable alphabet, or syllable tiles from 3rd grade; wrong tiles play their own sound (control of error)
 - **Read & Match:** read a word alone and pick its picture
-- **Tricky Words:** sight words by grade, Pre-K to 3rd
+- **❤️ Heart Words:** sight words by grade, Pre-K to 3rd; the letters that don't follow the rules are marked with a heart and the rest is sounded out
 - **Word Meaning:** read a word and pick its meaning (3rd to 5th)
 - **Storybook:** fifteen stories from decodable K stories to 5th-grade passages, with tap-a-word help and a question at the end
 
-Math activities include Number Cards (three-period lesson), Trace Numbers (sandpaper numerals), golden beads for place value, ten frames, clocks, coins, fraction pictures, area grids and a number pad. After two misses the answer is shown and the problem comes back sooner.
+Math activities include Number Cards (three-period lesson), Quick Look (dice and ten frames flashed for a moment), Number Bonds, Number Line, Trace Numbers (sandpaper numerals), golden beads for place value, ten frames, clocks, coins, fraction pictures, area grids and a number pad. After two misses the answer is shown and the problem comes back sooner.
 
 Practice is chosen by spaced repetition: nothing repeats back-to-back, missed items come back sooner, mastered ones less often, and new items (letter sounds in Montessori order, math facts from easiest) come in a couple at a time.
 
@@ -50,4 +51,4 @@ The grown-ups area shows stars and minutes per day for two weeks (split into rea
 - `audio/`: recorded clips for every sound, word, sentence, number and prompt
 - `tools/`: scripts that rebuild the audio (`node tools/export_list.js`, then `python3 tools/build_audio.py <voice dir>`; only missing clips are built unless you pass `--force`)
 
-Voice: Piper TTS "lessac" voice. Held sounds (mmm, sss) are made by lengthening the sound inside the voice model, and stop sounds are clipped short (b, not buh). Numbers are joined from recorded parts (forty-seven, thousand, three, hundred…).
+Voice: Kokoro TTS "af_heart" voice. Letter sounds are cut from clearly spoken words (/θ/ from "thin", /iː/ from "seat"): held sounds (mmm, sss, eee) loop their steady middle, and stop sounds are clipped short (b, not buh). Numbers are joined from recorded parts (forty-seven, thousand, three, hundred…).

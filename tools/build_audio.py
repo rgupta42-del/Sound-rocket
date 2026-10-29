@@ -1,219 +1,190 @@
-"""Builds every clip in /audio from tools/clips.json.
+"""Builds every clip in /audio from tools/clips.json, in the Kokoro "af_heart" voice.
 
-Voice: Piper "lessac" (medium). The model's per-sound durations are exposed and
-overridden, so held sounds like "mmm" and "sss" are spoken by the voice itself
-(no looping or time-stretching). Stop sounds (b, d, t...) are clipped short
-with only a trace of vowel, the way phonics teachers say them.
+Usage: python3 tools/build_audio.py /path/to/kokoro_dir [section ...] [--force]
+  kokoro_dir holds kokoro-v1.0.onnx and voices-v1.0.bin (github.com/thewh1teagle/kokoro-onnx, model-files-v1.0).
+  Needs: pip install kokoro-onnx soundfile numpy, and ffmpeg.
+  Sections: sounds words stretched chunks sentences phrases defs math geo labels (default: all).
+  Clips that already exist are kept; --force rebuilds them.
 
-Usage: python3 tools/build_audio.py /path/to/voice_dir [section ...] [--force]
-  voice_dir holds en-us-lessac-medium.onnx plus durA.onnx/durB.onnx (see make_models()).
-  Sections: sounds long words stretched chunks sentences phrases defs math geo labels (default: all).
-  Clips that already exist are kept; --force rebuilds them too.
+Letter sounds can't be read reliably by any text-to-speech voice on their own, so each one is cut out of a
+clearly spoken donor word (/θ/ from "thin", /iː/ from "seat") and then shaped the way phonics teachers say it:
+continuous sounds (mmm, sss, thhh, eee) are held for about half a second by looping their steady middle, and
+stop sounds (b, d, t...) keep only the burst and a sliver of the next vowel, so "b" not "buh".
 """
-import json, os, shutil, subprocess, sys, wave
-import numpy as np, onnx, onnxruntime as ort
-from piper import PiperVoice
-from piper.config import SynthesisConfig
+import json, os, subprocess, sys
+import numpy as np
+from kokoro_onnx import Kokoro
 
-VD = sys.argv[1]
+KD = sys.argv[1]
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "audio"); os.makedirs(OUT, exist_ok=True)
-SR = 16000; HOP = 256; W = 320
+OUT = os.environ.get("AUDIO_OUT") or os.path.join(ROOT, "audio"); os.makedirs(OUT, exist_ok=True)
+K = Kokoro(os.path.join(KD, "kokoro-v1.0.onnx"), os.path.join(KD, "voices-v1.0.bin"))
+VOICE, SR = "af_heart", 24000
+FORCE = "--force" in sys.argv
+want = lambda name: FORCE or not os.path.exists(os.path.join(OUT, name + ".mp3"))
+F = 240   # 10 ms frames
 
-def make_models():
-    base = os.path.join(VD, "en-us-lessac-medium.onnx")
-    a, b = os.path.join(VD, "durA.onnx"), os.path.join(VD, "durB.onnx")
-    if os.path.exists(a) and os.path.exists(b): return
-    m = onnx.load(base); c = [n for n in m.graph.node if n.op_type == "Ceil"][0]
-    m.graph.output.append(onnx.helper.make_tensor_value_info(c.output[0], onnx.TensorProto.FLOAT, None)); onnx.save(m, a)
-    m = onnx.load(base); c = [n for n in m.graph.node if n.op_type == "Ceil"][0]
-    c.op_type = "Identity"; del c.input[:]; c.input.append("dur_in")
-    m.graph.input.append(onnx.helper.make_tensor_value_info("dur_in", onnx.TensorProto.FLOAT, [1, 1, None])); onnx.save(m, b)
+def tts(text, speed=0.92):
+    """Kokoro adds a stray "uh" syllable before short inputs, so every clip is said after a pause
+    ("Okay... cat.") and only what follows the pause is kept."""
+    x, sr = K.create("Okay... " + text, voice=VOICE, speed=speed, lang="en-us")
+    assert sr == SR
+    x = x.astype(np.float64)
+    db = 20 * np.log10(rms(x) + 1e-9); quiet = db < db.max() - 35; run = 0
+    for i, q in enumerate(quiet):
+        run = run + 1 if q else 0
+        if run >= 12 and not quiet[i + 1:].all():                 # the first real pause with speech after it
+            start = next(j for j in range(i, len(quiet)) if not quiet[j])
+            return x[max(start - 2, 0) * F:]
+    raise RuntimeError(f"no pause found before {text!r}")
 
-make_models()
-V = PiperVoice.load(os.path.join(VD, "en-us-lessac-medium.onnx"))
-A = ort.InferenceSession(os.path.join(VD, "durA.onnx")); B = ort.InferenceSession(os.path.join(VD, "durB.onnx"))
-
-def synth_ph(phs, add=None, ls=1.0, ns=0.333, nw=0.0):
-    ids = V.phonemes_to_ids(list(phs))
-    inp = {"input": np.array([ids], dtype=np.int64), "input_lengths": np.array([len(ids)], dtype=np.int64),
-           "scales": np.array([ns, ls, nw], dtype=np.float32)}
-    a, d = A.run(None, inp)
-    if not add: return a.ravel()
-    d = d.copy()
-    for slot, f in add.items(): d[0, 0, slot] += f
-    return B.run(None, {**inp, "dur_in": d})[0].ravel()
-
-def frames(a):
+def rms(x): return np.array([np.sqrt(np.mean(x[i:i + F] ** 2)) for i in range(0, max(1, len(x) - F), F)])
+def periodic(x):
+    """per 10 ms frame: is it voiced (periodic)?"""
     out = []
-    for i in range(0, len(a) - W, W):
-        x = a[i:i+W]; e = float(np.sqrt(np.mean(x**2)))
-        X = np.abs(np.fft.rfft(x * np.hanning(W)))**2 + 1e-12; f = np.fft.rfftfreq(W, 1/SR)
-        c = float((X*f).sum() / X.sum()); ac = np.correlate(x, x, "full")[W-1:]
-        per = float(ac[40:230].max() / (ac[0] + 1e-12))
-        out.append((e, per > 0.5, c))
-    return out
+    for i in range(0, max(1, len(x) - 2 * F), F):
+        y = x[i:i + 2 * F]; y = y - y.mean(); ac = np.correlate(y, y, "full")[len(y) - 1:]
+        out.append(ac[0] > 1e-9 and ac[60:400].max() / ac[0] > .45)
+    return np.array(out)
 
-def longest(a, pred):
-    fr = frames(a); best = (0, 0); s = None
-    for i in range(len(fr) + 1):
-        ok = i < len(fr) and pred(*fr[i])
-        if ok and s is None: s = i
-        if not ok and s is not None:
-            if i - s > best[1] - best[0]: best = (s, i)
-            s = None
-    return best[0] * W, best[1] * W
+def clean(x, lead=.02):
+    """trim silence at both ends"""
+    e = rms(x); m = e.max() or 1
+    on = next((i for i, v in enumerate(e) if v > m * lead), 0)
+    end = len(e) - next((i for i, v in enumerate(e[::-1]) if v > m * .02), 0)
+    return x[max(0, on - 2) * F: min(len(x), (end + 3) * F)]
 
-def fade(x, i_ms=20, o_ms=40):
-    x = x.copy(); n1 = min(int(SR*i_ms/1000), len(x)//3); n2 = min(int(SR*o_ms/1000), len(x)//3)
-    if n1: x[:n1] *= np.linspace(0, 1, n1) ** 2
-    if n2: x[-n2:] *= np.linspace(1, 0, n2) ** 2
+def fade(x, a=.008, b=.03):
+    x = x.copy(); na, nb = min(int(SR * a), len(x) // 3), min(int(SR * b), len(x) // 3)
+    if na: x[:na] *= np.linspace(0, 1, na) ** 2
+    if nb: x[-nb:] *= np.linspace(1, 0, nb) ** 2
     return x
 
-def trim(x, rel=0.03):
-    m = np.abs(x).max() if len(x) else 0
-    if not m: return x
-    idx = np.where(np.abs(x) > m * rel)[0]
-    return x[max(0, idx[0] - 160): idx[-1] + 320]
+def loud(x, target=.1):
+    r = np.sqrt(np.mean(x ** 2)) or 1; y = x * (target / r); pk = np.abs(y).max()
+    return y * (.92 / pk) if pk > .92 else y
 
-def loud(x, target=0.11):
-    rms = np.sqrt(np.mean(x**2)) or 1
-    y = x * (target / rms); pk = np.abs(y).max()
-    return y * (0.9 / pk) if pk > 0.9 else y
-
-def save(name, x, quiet_target=None):
-    x = loud(x, quiet_target or 0.11)
-    x = np.concatenate([np.zeros(int(SR*0.02)), x, np.zeros(int(SR*0.04))]).astype(np.float32)
-    wav = os.path.join(VD, "tmp.wav")
-    with wave.open(wav, "wb") as w:
-        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes((np.clip(x, -1, 1)*32767).astype(np.int16).tobytes())
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", wav, "-ac", "1", "-ar", str(SR),
-                    "-codec:a", "libmp3lame", "-b:a", "48k", os.path.join(OUT, name + ".mp3")], check=True)
+def save(name, x, quiet=None):
+    x = np.concatenate([np.zeros(int(SR * .02)), loud(x, quiet or .1), np.zeros(int(SR * .05))])
+    p = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "f32le", "-ar", str(SR), "-ac", "1", "-i", "-",
+                        "-codec:a", "libmp3lame", "-b:a", "56k", os.path.join(OUT, name + ".mp3")], input=np.clip(x, -1, 1).astype(np.float32).tobytes())
+    assert p.returncode == 0
 
 # ---------- letter sounds ----------
-def held(ph, slot, pred, secs=0.6, carrier=("ˈ", "ʌ", "p")):
-    x = synth_ph([ph, *carrier], {slot: int(secs*SR/HOP) + 4})
-    s, e = longest(x, pred)
-    assert e - s > SR*0.3, (ph, (e-s)/SR)
-    seg = x[s + int(SR*0.04): e - int(SR*0.05)]
-    return fade(seg, 50, 90)
+def hold(seg, secs=.55):
+    """sustain a steady sound by looping its middle with crossfades (no pitch or speed change)"""
+    n = len(seg); assert n > SR * .02, f"cut came out too short ({n} samples)"
+    mid = seg[int(n * .25): int(n * .75)]
+    if len(mid) < SR * .04: mid = seg
+    out, xf = seg[: int(n * .25)].copy(), int(SR * .02)
+    while len(out) < SR * secs:
+        if len(out) >= xf and len(mid) > 2 * xf:
+            ramp = np.linspace(0, 1, xf); out[-xf:] = out[-xf:] * (1 - ramp) + mid[:xf] * ramp; out = np.concatenate([out, mid[xf:]])
+        else: out = np.concatenate([out, mid])
+    return fade(out[: int(SR * secs)], .04, .09)
 
-unvoiced = lambda lo: (lambda e, v, c: e > 0.004 and not v and c > lo)
-voiced_low = lambda hi: (lambda e, v, c: e > 0.01 and v and c < hi)
+def centroids(x):
+    """spectral centre of each 10 ms frame, in Hz"""
+    out = []
+    for i in range(0, max(1, len(x) - F), F):
+        X = np.abs(np.fft.rfft(x[i:i + F] * np.hanning(F))) ** 2; f = np.fft.rfftfreq(F, 1 / SR)
+        out.append((X * f).sum() / max(X.sum(), 1e-12))
+    return np.array(out)
 
-def vowel(ph, secs=0.5, long=False):
-    phs = ["t", "ˈ", ph, "ː", "p"] if long else ["t", "ˈ", ph, "p"]
-    x = synth_ph(phs, {5: int(secs*SR/HOP)})
-    s, e = longest(x, lambda e, v, c: e > 0.01 and v)
-    seg = x[s + int(SR*0.05): e - int(SR*0.05)]
-    return fade(seg, 50, 110)
+def first_voiced(x, start=0):
+    v = periodic(x); e = rms(x); m = e.max()
+    for i in range(start, len(v) - 3):
+        if v[i] and v[i + 1] and v[i + 2] and e[i] > m * .15: return i
+    return None
 
-def stop(phs, tail_ms=45, ls=1.1, maxlen=0.22):
-    x = synth_ph(list(phs) + ["ˈ", "ʌ", "p"], ls=ls)
-    fr = frames(x)
-    on = next(i for i, f in enumerate(fr) if f[0] > 0.006)
-    # vowel = first run of 4+ voiced frames with energy, after the onset
-    vs = None
-    for i in range(on, len(fr) - 4):
-        if all(fr[j][1] and fr[j][0] > 0.02 for j in range(i, i + 4)): vs = i; break
-    start = on * W; end = (vs or on + 4) * W + int(SR*tail_ms/1000)
-    end = min(max(end, start + int(SR*0.09)), start + int(SR*maxlen))
-    return fade(x[max(0, start - 80): end], 4, 35)
+def unvoiced_onset(word, secs=.55):
+    """s, f, sh, th: the noise before the vowel starts"""
+    x = clean(tts(word, .75)); vs = first_voiced(x)
+    return hold(x[: max(vs - 1, 4) * F], secs)
+
+def voiced_onset(word, secs=.55):
+    """m, n, l, v, z, r: the consonant before the vowel gets loud"""
+    x = clean(tts(word, .75)); e = rms(x); m = e.max()
+    vstart = next(i for i, v in enumerate(e) if v > m * .55)
+    return hold(x[: max(vstart - 1, 5) * F], secs)
+
+def buzz_onset(word, secs=.55):
+    """z: the buzzy hiss before the vowel (the hum of voicing before it is left off, or it sounds like "mmm")"""
+    x = clean(tts(word, .75)); e = rms(x); m = e.max(); c = centroids(x)[: len(e)]; peak = int(np.argmax(e))
+    a, b = longest_run((e[:peak] > m * .05) & (c[:peak] > 2500))
+    return hold(x[a * F: b * F], secs)
+
+def longest_run(mask, gap=2):
+    """(start, end) frames of the longest run of True, bridging gaps of up to `gap` frames"""
+    best, start, miss = (0, 0), None, 0
+    for i, on in enumerate(list(mask) + [False] * (gap + 1)):
+        if on:
+            if start is None: start = i
+            miss = 0; end = i + 1
+            if end - start > best[1] - best[0]: best = (start, end)
+        elif start is not None:
+            miss += 1
+            if miss > gap: start = None
+    return best
+
+def vowel_of(word, secs=.45, skip=.03):
+    """the voiced stretch of a word whose vowel sits between unvoiced sounds (sit, set, seat...)"""
+    # a vowel is loud with its energy low in the spectrum (fricatives and bursts are weak or hissy)
+    x = clean(tts(word, .75)); e = rms(x); m = e.max(); c = centroids(x)[: len(e)]
+    a, b = longest_run((e[: len(c)] > m * .3) & (c < 1800))
+    seg = x[a * F + int(SR * skip): b * F - int(SR * .015)]
+    return hold(seg, secs)
+
+def coda(word):
+    """ng, x: the sound after the vowel's loud part (sing, box)"""
+    x = clean(tts(word, .75)); e = rms(x); m = e.max()
+    peak = int(np.argmax(e)); end = next((i for i in range(peak, len(e)) if e[i] < m * .35), len(e) - 1)
+    return x[end * F:]
+
+def stop(word, vowel_ms=45, maxlen=.24):
+    """b, d, p, t, k, j, ch...: from the release to just after the vowel starts"""
+    x = clean(tts(word, .8)); e = rms(x); m = e.max()
+    on = next(i for i, v in enumerate(e) if v > m * .04)
+    vs = first_voiced(x, on + 1) or on + 6
+    end = vs * F + int(SR * vowel_ms / 1000)
+    seg = x[on * F: min(max(end, on * F + int(SR * .11)), on * F + int(SR * maxlen))]   # at least 110 ms, so it's audible
+    return fade(seg, .003, .05)
 
 def build_sounds():
     S = {}
-    S["s"] = held("s", 1, unvoiced(3500)); S["f"] = held("f", 1, unvoiced(800))
-    S["sh"] = held("ʃ", 1, unvoiced(2200)); S["th"] = held("θ", 1, lambda e, v, c: e > 0.002 and not v)
-    S["m"] = held("m", 2, voiced_low(450)); S["n"] = held("n", 2, voiced_low(450))
-    S["l"] = held("l", 2, voiced_low(520)); S["v"] = held("v", 2, lambda e, v, c: e > 0.004 and c < 1500)
-    S["r"] = vowel("ɚ", 0.5)
-    S["ng"] = held("ŋ", 2, voiced_low(500))
-    # The voice devoices a held z, so add back the buzz: hiss from its z plus a low hum from its v
-    hiss = held("z", 1, lambda e, v, c: e > 0.006 and c > 1800)
-    hum = S["v"]
-    n = min(len(hiss), len(hum))
-    def band(x, lo, hi):
-        X = np.fft.rfft(x); f = np.fft.rfftfreq(len(x), 1/SR); X[(f < lo) | (f > hi)] = 0
-        return np.fft.irfft(X, len(x))
-    h = band(hiss[:n], 2500, 8000); u = band(hum[:n], 60, 900)
-    S["z"] = fade(h / (np.sqrt(np.mean(h**2)) + 1e-9) * 0.6 + u / (np.sqrt(np.mean(u**2)) + 1e-9) * 0.8, 50, 90)
-    for k, p in [("a", "æ"), ("e", "ɛ"), ("i", "ɪ"), ("u", "ʌ")]: S[k] = vowel(p)
-    S["o"] = vowel("ɑ", 0.5, long=True)
-    S["ee"] = vowel("i", 0.5, long=True); S["oo"] = vowel("u", 0.5, long=True)
-    for k, p in [("b", "b"), ("d", "d"), ("g", "ɡ"), ("p", "p"), ("t", "t"), ("c", "k"), ("k", "k"), ("ck", "k")]: S[k] = stop([p])
-    S["j"] = stop(["d", "ʒ"], maxlen=0.25); S["ch"] = stop(["t", "ʃ"], maxlen=0.25)
-    S["h"] = stop(["h"], tail_ms=70); S["w"] = stop(["w"], tail_ms=60); S["y"] = stop(["j"], tail_ms=60)
-    S["qu"] = stop(["k", "w"], tail_ms=50, maxlen=0.28)
-    # x = /ks/: the end of "box"
-    x = synth_ph(["b", "ˈ", "ɑ", "k", "s"], {9: 14}, ls=1.2)
-    fr = frames(x); last_v = max(i for i, f in enumerate(fr) if f[1] and f[0] > 0.02)
-    S["x"] = fade(trim(x[(last_v + 1) * W:]), 5, 60)
+    for k, w in [("s", "sat"), ("f", "fat"), ("sh", "shop"), ("th", "thin")]: S[k] = unvoiced_onset(w)
+    for k, w in [("m", "mat"), ("n", "nap"), ("l", "lap"), ("v", "van"), ("r", "rat")]: S[k] = voiced_onset(w)
+    S["z"] = buzz_onset("zip")
+    for k, w in [("a", "sat"), ("e", "set"), ("i", "sit"), ("o", "sock"), ("u", "cut"), ("ee", "seat"), ("oo", "shoot"),
+                 ("ay", "say"), ("igh", "sight"), ("oa", "soap"), ("er", "fur"), ("ar", "far"), ("or", "for")]: S[k] = vowel_of(w)
+    S["ue"] = clean(tts("you", .75))
+    # stops come from words with the neutral "uh" vowel, so the sliver of vowel left on is the clipped one teachers use
+    for k, w in [("b", "but"), ("d", "dug"), ("g", "gum"), ("p", "pup"), ("t", "tub"), ("c", "cup"), ("k", "cut"), ("j", "jug"), ("ch", "chug"),
+                 ("h", "hug"), ("w", "won"), ("y", "yum"), ("qu", "quack")]:
+        S[k] = stop(w, 70 if k in ("w", "y", "qu", "h") else 55, .3 if k in ("qu", "ch", "j") else .2)
+    S["ck"] = S["k"]
+    S["ng"] = hold(coda("sing"), .5)
+    S["x"] = fade(coda("box"), .005, .05)
     for k, x in S.items():
-        quiet = 0.07 if k in ("f", "th", "h") else None  # soft sounds stay soft
-        save("s_" + k, x, quiet)
-    return S
-
-# ---------- words, sentences, prompts ----------
-def to_sr(x):
-    # the medium voice speaks at 22050 Hz; clips are 16000 Hz
-    vr = V.config.sample_rate
-    if vr == SR: return x
-    return np.interp(np.linspace(0, len(x) - 1, int(len(x) * SR / vr)), np.arange(len(x)), x)
-
-def say(text, ls=1.0, phonemes=None):
-    if phonemes:
-        return fade(trim(to_sr(synth_ph(phonemes, ls=ls, ns=0.5, nw=0.6))), 5, 40)
-    cfg = SynthesisConfig(length_scale=ls, noise_scale=0.5, noise_w_scale=0.6)
-    x = np.concatenate([c.audio_float_array for c in V.synthesize(text, cfg)])
-    return fade(trim(to_sr(x)), 5, 40)
-
-# 2nd grade sounds: long vowels say their names; er/ir/ur share the r sound (/er/)
-LONG = {"ay": ["ˈ", "e", "ɪ"], "igh": ["ˈ", "a", "ɪ"], "oa": ["ˈ", "o", "ʊ"], "ue": ["j", "ˈ", "u", "ː"],
-        "ar": ["ˈ", "ɑ", "ː", "ɹ"], "or": ["ˈ", "ɔ", "ː", "ɹ"]}
-def build_long():
-    for k, ph in LONG.items():
-        if want("s_" + k): save("s_" + k, say("", 1.5, ph))
-    if want("s_er"): shutil.copy(os.path.join(OUT, "s_r.mp3"), os.path.join(OUT, "s_er.mp3"))
-
-FORCE = "--force" in sys.argv
-def want(name):
-    return FORCE or not os.path.exists(os.path.join(OUT, name + ".mp3"))
+        print("sound", k, round(len(x) / SR, 2), "s", flush=True)
+        if want("s_" + k): save("s_" + k, x, .06 if k in ("f", "th", "h") else None)   # soft sounds stay soft
 
 def main():
     C = json.load(open(os.path.join(ROOT, "tools", "clips.json")))
     only = set(a for a in sys.argv[2:] if not a.startswith("--"))
     run = lambda sec: not only or sec in only
-    if run("sounds") and (FORCE or want("s_m")): build_sounds()
-    if run("long"): build_long()
-    if run("words"):
-        for k, w in C["words"].items():
-            if not want(k): continue
-            if w == "a": save(k, say("", 1.1, ["ˈ", "ʌ"]))
-            else: save(k, say(w, 1.1))
-    if run("stretched"):
-        for k, w in C["stretched"].items():
-            if want(k): save(k, say(w, 2.3))
-    if run("chunks"):
-        for k, t in C.get("chunks", {}).items():
-            if want(k): save(k, say(t, 1.25))
-    if run("sentences"):
-        for k, t in C["sentences"].items():
-            if want(k): save(k, say(t, 1.15))
-    if run("phrases"):
-        for k, t in C["phrases"].items():
-            if want("p_" + k): save("p_" + k, say(t, 1.0))
-    if run("defs"):
-        for k, t in C.get("defs", {}).items():
-            if want(k): save(k, say(t, 1.1))
-    if run("math"):
-        for k, t in C.get("math", {}).items():
-            if want(k): save(k, say(t, 1.05 if k.startswith("m_") else 1.1))
-    if run("labels"):
-        for k, t in C.get("labels", {}).items():
-            if want(k): save(k, say(t + "!", 1.0))
-    if run("geo"):
-        for k, t in C.get("geo", {}).items():
-            if want(k): save(k, say(t, 1.05))
+    if run("sounds"): build_sounds()
+    jobs = []
+    if run("words"): jobs += [(k, w + ".", .85) for k, w in C["words"].items()]
+    if run("stretched"): jobs += [(k, w + ".", .5) for k, w in C["stretched"].items()]
+    if run("chunks"): jobs += [(k, t + ".", .8) for k, t in C.get("chunks", {}).items()]
+    if run("sentences"): jobs += [(k, t, .9) for k, t in C["sentences"].items()]
+    if run("phrases"): jobs += [("p_" + k, t, .92) for k, t in C["phrases"].items()]
+    for sec in ("defs", "math", "geo", "labels"):
+        if run(sec): jobs += [(k, t + ("!" if sec == "labels" else ""), .92) for k, t in C.get(sec, {}).items()]
+    for i, (name, text, speed) in enumerate(jobs):
+        if want(name): save(name, clean(tts(text, speed)))
+        if i % 200 == 0: print(i, "/", len(jobs), flush=True)
 
 main()
 print("clips:", len(os.listdir(OUT)))

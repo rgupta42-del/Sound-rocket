@@ -81,6 +81,8 @@ window.DATA = (() => {
     g3:["although","answer","busy","caught","carry","different","early","either","eye","friend","heard","hour","island","learn","neighbor","ocean","thought","touch","women","young"]
   };
   const TRICKY = Object.values(TRICKY_BY).flat();
+  // Heart words: the letters (by position) that don't follow the phonics a child knows yet, learned "by heart" ❤
+  const HEART = {"the": [2], "a": [0], "is": [1], "to": [1], "my": [1], "you": [1, 2], "we": [1], "he": [1], "she": [2], "said": [1, 2], "was": [1, 2], "of": [0, 1], "go": [1], "no": [1], "like": [1, 3], "are": [0, 1, 2], "here": [1, 2, 3], "has": [2], "his": [2], "they": [2, 3], "what": [2], "do": [1], "could": [1, 2, 3], "would": [1, 2, 3], "should": [2, 3, 4], "there": [2, 3, 4], "where": [2, 3, 4], "were": [1, 2, 3], "some": [1, 3], "come": [1, 3], "one": [0, 1, 2], "two": [1, 2], "once": [0, 1, 2, 3], "who": [0, 2], "why": [2], "does": [1, 2], "again": [2, 3], "any": [0], "many": [1], "very": [3], "every": [4], "their": [2, 3, 4], "because": [3, 4, 5, 6], "been": [1, 2], "both": [1], "buy": [1, 2], "done": [1, 3], "eight": [0, 1, 2, 3], "enough": [0, 2, 3, 4, 5], "laugh": [1, 2, 3, 4], "only": [0], "pretty": [2], "please": [3, 5], "sure": [0, 1, 2, 3], "though": [2, 3, 4, 5], "through": [3, 4, 5, 6], "together": [1], "wash": [1], "water": [1], "warm": [1, 2], "wear": [1, 2, 3], "write": [0]};
 
   // Word meanings for Word Meaning (3rd to 5th grade)
   const VOCAB = {
@@ -147,9 +149,9 @@ window.DATA = (() => {
 
   // acts: which reading activities each grade shows (in this order)
   const READING = {
-    prek:{ blurb:"Letter sounds", sounds:PINK_SOUNDS, words:{}, acts:["sounds","trace","ispy","tricky"] },
-    k:   { blurb:"3-letter words", sounds:PINK_SOUNDS, words:wordList(K_WORDS), acts:["sounds","trace","ispy","blend","build","match","tricky","stories"] },
-    g1:  { blurb:"Blends, sh ch th ck ee oo ng", sounds:[...GREEN_SOUNDS, "a","e","i","o","u"], words:wordList(G1_WORDS), acts:["sounds","ispy","blend","build","match","tricky","stories"] },
+    prek:{ blurb:"Letter sounds, rhyming, syllables", sounds:PINK_SOUNDS, words:{}, acts:["sounds","rhyme","clap","ispy","trace","tricky"] },
+    k:   { blurb:"3-letter words", sounds:PINK_SOUNDS, words:wordList(K_WORDS), acts:["sounds","rhyme","clap","boxes","blend","build","match","lastsound","ispy","trace","tricky","stories"] },
+    g1:  { blurb:"Blends, sh ch th ck ee oo ng", sounds:[...GREEN_SOUNDS, "a","e","i","o","u"], words:wordList(G1_WORDS), acts:["sounds","boxes","blend","build","match","lastsound","ispy","tricky","stories"] },
     g2:  { blurb:"Long vowels and bossy r", sounds:LONG_SOUNDS, words:wordList(G2_WORDS), acts:["sounds","blend","build","match","tricky","stories"] },
     g3:  { blurb:"Syllables and endings", chunks:true, words:wordList(G3_WORDS, "chunks"), acts:["blend","build","vocab","tricky","stories"] },
     g4:  { blurb:"Prefixes and suffixes", chunks:true, words:wordList(G4_WORDS, "chunks"), acts:["blend","build","vocab","stories"] },
@@ -234,7 +236,7 @@ window.DATA = (() => {
     mission2:"Mission complete! Great work today!", blast2:"Blast off! Great work!", chunks:"Good chunks! Now read the whole word.",
     meaning:"What does this word mean?", silent:"This e is silent. It makes the vowel say its name.", answeris:"The answer is",
     smart:"Smart thinking!", correct:"That's right!",
-    round:"Round complete! Great job!", streak:"You're on a streak! Keep it up!", bonus:"Bonus blast off!", checked:"Checked off! Great work!", round3:"Three stars! Amazing!", roundbest:"Round complete! New best score!", roundtry:"Round complete! Play again to earn more stars."
+    startswith:"Which picture starts with this sound?", findword:"Find the word", round:"Round complete! Great job!", streak:"You're on a streak! Keep it up!", bonus:"Bonus blast off!", checked:"Checked off! Great work!", round3:"Three stars! Amazing!", roundbest:"Round complete! New best score!", roundtry:"Round complete! Play again to earn more stars."
   };
 
 
@@ -243,17 +245,21 @@ window.DATA = (() => {
     sounds: ["🔤", "Sound Cards", "Learn a sound, find it, say it", "Montessori 3-step lesson"],
     trace: ["✍️", "Trace It", "Trace the letter and say its sound", "Sandpaper letters"],
     ispy: ["🔭", "I Spy", "Find what starts with the sound", "Listening game"],
-    blend: ["🧩", "Blend It", "Sound out words, then read them", "With a grown-up"],
+    blend: ["🧩", "Blend It", "Sound out a word, find its picture", "Blending: sound by sound, then the whole word"],
     build: ["🛠️", "Build a Word", "Hear a word, build it with letters", "Movable alphabet"],
     match: ["🖼️", "Read & Match", "Read the word, pick the picture", "Reads alone"],
-    tricky: ["⭐", "Tricky Words", "Words you just know by sight", "With a grown-up"],
+    rhyme: ["🎵", "Rhyme Time", "Which words rhyme?", "Phonemic awareness: rhyming"],
+    clap: ["👏", "Clap It", "Clap the parts of a word", "Phonemic awareness: syllables"],
+    boxes: ["🟦", "Sound Boxes", "How many sounds in a word?", "Elkonin boxes: segmenting sounds"],
+    lastsound: ["🔚", "Last Sound", "What sound does it end with?", "Phonemic awareness: ending sounds"],
+    tricky: ["❤️", "Heart Words", "Learn tricky words by heart", "Heart words: sound out what you can, learn the rest by heart"],
     vocab: ["💬", "Word Meaning", "Read a word, pick what it means", "Vocabulary"],
     stories: ["📖", "Storybook", "Read a little story yourself", "Stories and questions"]
   };
   // 3rd grade and up read in syllable chunks instead of letter sounds
   const CHUNK_ACTS = {
-    blend: ["🧩", "Chunk It", "Read big words chunk by chunk", "With a grown-up"],
+    blend: ["🧩", "Chunk It", "Read big words chunk by chunk", "Syllables: read each chunk, then the whole word"],
     build: ["🛠️", "Build a Word", "Put the word's chunks in order", "Syllable tiles"]
   };
-  return { ACTS, CHUNK_ACTS, GRADES, SOUNDS, SOUND_CLIP, PINK_SOUNDS, GREEN_SOUNDS, LONG_SOUNDS, VOWELS, PHONOGRAMS, READING, TRICKY, TRICKY_BY, VOCAB, STORIES, PHRASES, tiles, slug };
+  return { HEART, ACTS, CHUNK_ACTS, GRADES, SOUNDS, SOUND_CLIP, PINK_SOUNDS, GREEN_SOUNDS, LONG_SOUNDS, VOWELS, PHONOGRAMS, READING, TRICKY, TRICKY_BY, VOCAB, STORIES, PHRASES, tiles, slug };
 })();

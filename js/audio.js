@@ -82,7 +82,9 @@ window.Audio2 = (() => {
       el.src = src;
       const p = el.play();
       if (p && p.then) p.then(() => { status.path = "audio element"; elReady = true; }).catch(e => { if (e.name === "AbortError") return done(true); status.error = "audio element: " + e.name; done(false); });  // AbortError: cut off by the next clip
-      t = setTimeout(() => done(true), 15000);
+      // never wait longer than the clip itself: if iOS doesn't send "ended", move on anyway
+      t = setTimeout(() => done(true), 6000);
+      el.onloadedmetadata = () => { if (isFinite(el.duration) && el.duration > 0) { clearTimeout(t); t = setTimeout(() => done(true), el.duration * 1000 + 700); } };
     });
   }
 
