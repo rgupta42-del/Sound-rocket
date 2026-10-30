@@ -132,7 +132,7 @@ function checkUnlocks() {
 // ---------- ROUNDS: each activity is played in short rounds with a finish line ----------
 // 10 questions (6 on Pre-K and K), fewer if the activity has fewer different questions; no repeats inside a round.
 let round = null;
-const ACT_SCREENS = ["sounds", "trace", "ispy", "blend", "build", "match", "tricky", "vocab", "rhyme", "clap", "boxes", "lastsound", "math", "geo"];
+const ACT_SCREENS = ["sounds", "trace", "ispy", "blend", "build", "match", "tricky", "vocab", "rhyme", "clap", "boxes", "lastsound", "letters", "missing", "same", "riddle", "math", "geo"];
 function startRound(name, arg) {
   if (!ACT_SCREENS.includes(name)) { round = null; return; }
   const sub = PRACTICE[name] ? name : "reading", act = PRACTICE[name] ? arg : name, g = St.S.grade[sub];
@@ -697,16 +697,18 @@ SCREENS.vocab = () => {
 // ---------- STORYBOOK ----------
 const answerClip = (st, i) => /^[a-z]+$/i.test(st.q[1][i][0]) ? W(st.q[1][i][0]) : `ans_${st.id}_${i}`;
 SCREENS.stories = () => {
-  const S = St.S;
-  const books = D.STORIES.slice().sort((a, b) => gradeIndex(a.level) - gradeIndex(b.level));
+  const S = St.S, mine = S.grade.reading;
+  // the child's own grade first, then the others in order
+  const grades = D.GRADES.map(g => g.id).filter(g => D.STORIES.some(b => b.level === g)).sort((a, b) => (b === mine) - (a === mine) || gradeIndex(a) - gradeIndex(b));
+  const book = b => {
+    const g = GRADE(b.level), read = S.stories[b.id], locked = !St.lessonOpen("reading", b.level, "stories");
+    return `<button class="book ${locked ? "locked" : ""}" style="border-left-color:${g.color}" data-id="${b.id}"><span class="cv">${b.cover}</span><b>${esc(b.title)}</b>
+      <small>${locked ? "🔒 " : ""}${b.level === "prek" ? "Read to me" : g.label}${read ? ` · ✓ read ${read.times}×` : ""}</small></button>`;
+  };
   shell("Storybook", `
-    <div class="panel"><p>Read the story to yourself. Tap any word you get stuck on to hear it. Words underlined in yellow are tricky words.</p></div>
-    <div class="shelf">${books.map(b => {
-      const g = GRADE(b.level), read = S.stories[b.id];
-      const locked = !St.lessonOpen("reading", b.level, "stories");
-      return `<button class="book" style="border-left-color:${g.color}" data-id="${b.id}"><span class="cv">${b.cover}</span><b>${esc(b.title)}</b>
-        <small>${locked ? "🔒 " : ""}${g.label} · ${g.planet}${read ? ` · read ${read.times}×` : ""}</small></button>`;
-    }).join("")}</div>`);
+    <div class="panel"><p>Read the story to yourself. Tap any word you get stuck on to hear it. Words underlined in yellow are tricky words. Pre-K books read themselves to you.</p></div>
+    ${grades.map(gid => { const g = GRADE(gid); return `<h3 class="shelfhead">${g.label} · ${g.planet}${gid === mine ? " · your planet" : ""}</h3>
+      <div class="shelf">${D.STORIES.filter(b => b.level === gid).map(book).join("")}</div>`; }).join("")}`);
   app.querySelectorAll(".book").forEach(b => b.onclick = () => {
     const st = D.STORIES.find(s => s.id === b.dataset.id);
     if (!St.lessonOpen("reading", st.level, "stories")) { toast("This story is on a planet you haven't reached yet.", 3000); return; }
@@ -733,7 +735,9 @@ SCREENS.story = (id) => {
         <button class="btn yes" id="next">${page === st.pages.length - 1 ? "Finish ✓" : "Next →"}</button>
       </div>
       <div class="row"><button class="btn" id="read">🔊 Read it to me</button></div></section>`);
-    if (page === 0) A.play("title_" + st.id);
+    // Pre-K books read every page aloud; older readers hear the title and read the page themselves
+    if (st.level === "prek") A.play(page === 0 ? ["title_" + st.id, "sent_" + st.id + "_0"] : "sent_" + st.id + "_" + page, 300);
+    else if (page === 0) A.play("title_" + st.id);
     A.preload(["sent_" + st.id + "_" + page, ...words.map(t => W(t.replace(/[^A-Za-z']/g, "")))]);
     app.querySelectorAll("#pg button").forEach(b => b.onclick = async () => {
       app.querySelectorAll("#pg button").forEach(x => lit(x, false)); lit(b, true);
@@ -775,7 +779,7 @@ SCREENS.story = (id) => {
 // The practice screen for math and geography: multiple choice or a number pad, two tries, then the answer.
 SCREENS.math = id => practice("math", id);
 // the listening games for reading run on the same practice screen
-["rhyme", "clap", "boxes", "lastsound"].forEach(id => SCREENS[id] = () => practice("reading", id, RG));
+["rhyme", "clap", "boxes", "lastsound", "letters", "missing", "same", "riddle"].forEach(id => SCREENS[id] = () => practice("reading", id, RG));
 SCREENS.geo = id => practice("geo", id);
 function practice(sub, id, P = PRACTICE[sub]) {
   const g = St.S.grade[sub], sk = P.SK[id], entry = P.GRADE_SKILLS ? P.GRADE_SKILLS[g].find(e => e[0] === id) : [id, "", sk && sk.name];
@@ -789,7 +793,7 @@ function practice(sub, id, P = PRACTICE[sub]) {
   shell(entry[2] || sk.name, `<section class="card math">
     <p class="prompt big">${p.q}</p>
     ${p.vis ? `<div class="mvis">${p.vis}</div>` : ""}
-    ${p.choices ? `<div class="mchoices ${p.wide ? "wide" : ""} ${p.maps ? "maps" : ""} ${p.choices.some(c => !/[<]/.test(c.html) && c.html.length > 10) ? "long" : ""}">${p.choices.map((c, i) => `<button class="mchoice" data-i="${i}">${c.html}</button>`).join("")}</div>`
+    ${p.choices ? `<div class="mchoices ${p.wide ? "wide" : ""} ${p.stack ? "stack" : ""} ${p.maps ? "maps" : ""} ${p.choices.some(c => !/[<]/.test(c.html) && c.html.length > 10) ? "long" : ""}">${p.choices.map((c, i) => `<button class="mchoice" data-i="${i}">${c.html}</button>`).join("")}</div>`
       : `<div class="pad"><output class="padout" id="out" aria-live="polite"></output><div class="keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9, p.pad.dec ? "." : "", 0, "⌫"].map(k => k === "" ? "<span></span>" : `<button class="key" data-k="${k}">${k}</button>`).join("")}</div>
         <button class="btn yes big" id="check">Check ✓</button></div>`}
     <div class="row"><button class="btn" id="hear">🔊 Hear it</button><button class="btn" id="skip">Skip</button></div></section>`);
@@ -998,6 +1002,8 @@ SCREENS.progress = (tab) => {
         <li><b>The rocket</b> at the top fills with today's stars. ${St.GOAL} stars completes the daily mission and launches it; every ${St.GOAL} after that is a bonus launch.</li>
         <li><b>Listening first:</b> before reading, children learn to hear sounds in words. Rhyme Time, Clap It (syllables), Sound Boxes (how many sounds, after Elkonin) and Last Sound train this, and they come before and alongside phonics.</li>
         <li><b>Heart words:</b> tricky words are sounded out as far as they go; only the odd letters (shown red with a ❤) are learned by heart.</li>
+        <li><b>Picture games:</b> Letter Match, Missing Letters, Same Word, Riddles, Odd One Out, Measure It and Picture Graph can be played with the sound off. The question is still read out, but the answer is all in the pictures.</li>
+        <li><b>Stories:</b> every planet has its own shelf. Pre-K books read themselves aloud; from K up, children read and tap only the words they need.</li>
         <li><b>Math sense:</b> Quick Look trains seeing small amounts at a glance (subitizing), Number Bonds shows how numbers split into parts, and the Number Line builds a sense of size.</li>
         <li><b>Reading:</b> letter sounds (Pre-K), 3-letter words (K), blends and sh ch th (1st), long vowels and bossy r (2nd), then syllables, prefixes, suffixes and roots with word meanings and longer stories (3rd to 5th).</li>
         <li><b>Math:</b> counting, shapes and patterns (Pre-K), adding within 10 (K), facts to 20 and tens and ones (1st), 2-digit numbers, money and time (2nd), times tables and fractions (3rd), multi-digit work and decimals (4th), fraction and decimal operations (5th).</li>
@@ -1056,7 +1062,7 @@ SCREENS.progress = (tab) => {
 };
 
 // reading screens set the subject so stars and praise go to the right place
-["sounds", "trace", "ispy", "blend", "build", "match", "tricky", "vocab", "rhyme", "clap", "boxes", "lastsound", "stories", "story"].forEach(n => {
+["sounds", "trace", "ispy", "blend", "build", "match", "tricky", "vocab", "rhyme", "clap", "boxes", "lastsound", "letters", "missing", "same", "riddle", "stories", "story"].forEach(n => {
   const f = SCREENS[n]; SCREENS[n] = arg => { St.setSubject("reading"); return f(arg); };
 });
 

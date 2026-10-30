@@ -141,6 +141,23 @@ details.panel[open] summary{margin-bottom:6px}
 .subjects button{border:none;border-radius:16px;padding:8px 6px;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1.1;background:transparent;font-family:var(--display);font-weight:800;font-size:1.15rem;cursor:pointer;color:#C5D1F5}
 .subjects button[aria-selected="true"]{background:var(--sun);color:#2a1d00}
 .subjects .si{font-size:1.5rem}
+/* picture games */
+.bigletter{font-family:var(--display);font-weight:800;font-size:5.5rem;line-height:1;color:var(--ink)}
+.bigword,.missword{font-family:var(--read);font-weight:700;font-size:3rem;letter-spacing:.06em;color:var(--ink);line-height:1.2}
+.missword .blank{color:var(--phono);letter-spacing:.12em}
+.wordchoice{font-family:var(--read);font-weight:700;font-size:2rem;letter-spacing:.05em}
+.riddle{display:block;font-size:1.35rem;line-height:1.45;max-width:30ch;margin:0 auto}
+.pgraph{display:flex;flex-direction:column;gap:6px;background:var(--card2);border-radius:16px;padding:10px 12px;width:100%;max-width:360px}
+.pgrow{display:flex;align-items:center;gap:8px;border-bottom:2px dashed var(--line);padding-bottom:4px}
+.pglab{font-size:1.5rem;width:2.2rem;text-align:center;border-right:3px solid var(--ink);padding-right:6px}
+.pgbar{font-size:1.35rem;letter-spacing:.12em;text-align:left;flex:1;word-break:break-all}
+.pgkey{color:var(--muted);font-weight:700}
+.mbar{width:100%;max-width:340px;height:auto;display:block}
+.mbar.big{max-width:380px}
+.mchoices.stack{grid-template-columns:1fr}
+.mchoices.stack .mchoice{padding:10px 14px;min-height:64px}
+.shelfhead{font-family:var(--display);margin:18px 4px 8px;color:#C5D1F5}
+
 @media (max-width:420px){.subjects button{font-size:1rem;padding:8px 4px}}
 .planets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 @media (min-width:640px){.planets{grid-template-columns:repeat(7,1fr)}}

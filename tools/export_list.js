@@ -12,6 +12,7 @@ Object.values(D.SOUNDS).forEach(([,kw])=>addW(kw));
 D.TRICKY.forEach(addW);
 window.READGAMES.words().forEach(addW);
 Object.values(D.VOCAB).flat().forEach(([w,d])=>{addW(w);defs["d_"+D.slug(w)]=d;});
+Object.assign(sentences,window.READGAMES.sentences());
 D.STORIES.forEach(s=>{
   sentences["title_"+s.id]=s.title;
   s.pages.forEach(([t],i)=>{sentences[`sent_${s.id}_${i}`]=t; t.replace(/[^A-Za-z' ]/g," ").split(/\s+/).filter(Boolean).forEach(addW);});

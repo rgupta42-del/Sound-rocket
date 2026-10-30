@@ -149,11 +149,11 @@ window.DATA = (() => {
 
   // acts: which reading activities each grade shows (in this order)
   const READING = {
-    prek:{ blurb:"Letter sounds, rhyming, syllables", sounds:PINK_SOUNDS, words:{}, acts:["sounds","rhyme","clap","ispy","trace","tricky"] },
-    k:   { blurb:"3-letter words", sounds:PINK_SOUNDS, words:wordList(K_WORDS), acts:["sounds","rhyme","clap","boxes","blend","build","match","lastsound","ispy","trace","tricky","stories"] },
-    g1:  { blurb:"Blends, sh ch th ck ee oo ng", sounds:[...GREEN_SOUNDS, "a","e","i","o","u"], words:wordList(G1_WORDS), acts:["sounds","boxes","blend","build","match","lastsound","ispy","tricky","stories"] },
-    g2:  { blurb:"Long vowels and bossy r", sounds:LONG_SOUNDS, words:wordList(G2_WORDS), acts:["sounds","blend","build","match","tricky","stories"] },
-    g3:  { blurb:"Syllables and endings", chunks:true, words:wordList(G3_WORDS, "chunks"), acts:["blend","build","vocab","tricky","stories"] },
+    prek:{ blurb:"Letter sounds, rhyming, syllables", sounds:PINK_SOUNDS, words:{}, acts:["sounds","letters","rhyme","clap","ispy","trace","tricky","stories"] },
+    k:   { blurb:"3-letter words", sounds:PINK_SOUNDS, words:wordList(K_WORDS), acts:["sounds","missing","same","rhyme","clap","boxes","blend","build","match","lastsound","ispy","trace","tricky","stories"] },
+    g1:  { blurb:"Blends, sh ch th ck ee oo ng", sounds:[...GREEN_SOUNDS, "a","e","i","o","u"], words:wordList(G1_WORDS), acts:["sounds","missing","riddle","same","boxes","blend","build","match","lastsound","ispy","tricky","stories"] },
+    g2:  { blurb:"Long vowels and bossy r", sounds:LONG_SOUNDS, words:wordList(G2_WORDS), acts:["sounds","missing","riddle","blend","build","match","tricky","stories"] },
+    g3:  { blurb:"Syllables and endings", chunks:true, words:wordList(G3_WORDS, "chunks"), acts:["blend","build","riddle","vocab","tricky","stories"] },
     g4:  { blurb:"Prefixes and suffixes", chunks:true, words:wordList(G4_WORDS, "chunks"), acts:["blend","build","vocab","stories"] },
     g5:  { blurb:"Greek and Latin roots", chunks:true, words:wordList(G5_WORDS, "chunks"), acts:["blend","build","vocab","stories"] }
   };
@@ -161,6 +161,23 @@ window.DATA = (() => {
 
   // Stories. Each page: text and a picture. q: question with answers (first is right), [answer, picture].
   const STORIES = [
+    // Pre-K: picture books read aloud (each page is read to the child)
+    { id:"colors", level:"prek", title:"Colors Everywhere", cover:"🌈", pages:[
+      ["I see a red apple.","🍎"],["I see a yellow sun.","☀️"],["I see a green frog.","🐸"],
+      ["I see a blue fish.","🐟"],["I see purple grapes.","🍇"],["I see a rainbow!","🌈"]],
+      q:["What was green?",[["frog","🐸"],["apple","🍎"],["sun","☀️"]]] },
+    { id:"moo", level:"prek", title:"Who Says Moo?", cover:"🐄", pages:[
+      ["The cow says moo.","🐄"],["The duck says quack.","🦆"],["The dog says woof.","🐶"],
+      ["The cat says meow.","🐱"],["The sheep says baa.","🐑"],["And I say, good night!","🌙"]],
+      q:["Who says quack?",[["duck","🦆"],["cow","🐄"],["dog","🐶"]]] },
+    { id:"count", level:"prek", title:"Count with Me", cover:"🔢", pages:[
+      ["One big sun.","☀️"],["Two little birds.","🐦🐦"],["Three red apples.","🍎🍎🍎"],
+      ["Four yellow ducks.","🦆🦆🦆🦆"],["Five shiny stars.","⭐⭐⭐⭐⭐"],["Let's count again!","😄"]],
+      q:["How many birds were there?",[["two","🐦🐦"],["one","🐦"],["three","🐦🐦🐦"]]] },
+    { id:"teddy", level:"prek", title:"Bedtime for Teddy", cover:"🧸", pages:[
+      ["Teddy takes a bath.","🛁"],["Teddy puts on his pajamas.","🧸"],["Teddy brushes his teeth.","🪥"],
+      ["Teddy reads a book.","📖"],["Teddy gets a big hug.","🤗"],["Good night, Teddy!","🌙"]],
+      q:["What did Teddy read?",[["book","📖"],["ball","⚽"],["cake","🎂"]]] },
     { id:"jet", level:"k", title:"Sam and the Jet", cover:"🚀", pages:[
       ["Sam has a big red jet.","🚀"],["Sam and his cat get in.","🐱"],["The jet can zip up and up.","✨"],
       ["The sun is hot. The cat naps.","☀️"],["Bump! The jet lands in the mud.","💥"],["Sam and the cat had fun.","😄"]],
@@ -173,6 +190,22 @@ window.DATA = (() => {
       ["Pip is a pup.","🐕"],["Pip digs in the mud.","⛏️"],["Pip gets a big red box.","📦"],
       ["In the box is a hat.","🎩"],["Pip has the hat on.","🎩"],["Pip is a pup in a hat!","🐶"]],
       q:["What was in the box?",[["hat","🎩"],["sock","🧦"],["egg","🥚"]]] },
+    { id:"fox", level:"k", title:"The Fox and the Hen", cover:"🦊", pages:[
+      ["A fox sat in a den.","🦊"],["A red hen got up.","🐔"],["The hen had ten eggs.","🥚"],
+      ["The fox ran to the hen.","🦊"],["The hen said, Get back!","🐔"],["The fox ran off. The hen is glad.","😄"]],
+      q:["How many eggs did the hen have?",[["ten","🔟"],["six","6️⃣"],["two","2️⃣"]]] },
+    { id:"cub", level:"k", title:"Bob the Cub", cover:"🐻", pages:[
+      ["Bob is a cub.","🐻"],["Bob can run and hop.","🏃"],["Bob sat in the sun.","☀️"],
+      ["Bob got a bug in his cup.","🐛"],["Bob had a nap in a hut.","🛖"],["Bob is a fun cub!","🐻"]],
+      q:["What got in Bob's cup?",[["bug","🐛"],["jam","🍓"],["egg","🥚"]]] },
+    { id:"map", level:"k", title:"Max and the Map", cover:"🗺️", pages:[
+      ["Max has a map.","🗺️"],["The map has a red X.","❌"],["Max digs in the sand.","⛏️"],
+      ["Max digs and digs.","🏖️"],["Max gets a tin box.","📦"],["In the box is a gem!","💎"]],
+      q:["What was in the box?",[["gem","💎"],["hat","🎩"],["bug","🐛"]]] },
+    { id:"pig", level:"k", title:"The Pig in the Mud", cover:"🐷", pages:[
+      ["Meg has a pig.","🐷"],["The pig is in the mud.","🟤"],["Meg gets the pig.","👧"],
+      ["Meg has mud on her leg.","🦵"],["Meg and the pig get in the tub.","🛁"],["Rub, rub, rub. The pig is pink!","🐷"]],
+      q:["Where did Meg and the pig get clean?",[["tub","🛁"],["bed","🛏️"],["van","🚐"]]] },
     { id:"frog", level:"g1", title:"Fred the Frog", cover:"🐸", pages:[
       ["Fred is a frog in a pond.","🐸"],["Fred can jump and swim.","🏊"],["A crab spots Fred.","🦀"],
       ["Snap, snap! said the crab.","🦀"],["Fred jumps on a big plant.","🌱"],["Fred is fast. The crab is not!","🐸"]],
@@ -189,6 +222,18 @@ window.DATA = (() => {
       ["Six sheep sleep in a shed.","🐑"],["A chick sings, cheep, cheep!","🐥"],["The sheep get up.","🐑"],
       ["The sheep munch on green grass.","🌱"],["Then the sheep need a bath.","🛁"],["Splash! Six wet sheep!","💦"]],
       q:["Who sang cheep, cheep?",[["chick","🐥"],["sheep","🐑"],["fish","🐟"]]] },
+    { id:"chick", level:"g1", title:"The Chick and the Duck", cover:"🐥", pages:[
+      ["A chick and a duck sat by the pond.","🐥"],["The duck swam, but the chick did not.","🦆"],["Quack! said the duck. Jump in!","🦆"],
+      ["The chick got wet and sad.","😢"],["The duck let the chick sit on his back.","🦆"],["Then they swam past the fish.","🐟"]],
+      q:["Who did the chick sit on?",[["duck","🦆"],["frog","🐸"],["fish","🐟"]]] },
+    { id:"shell", level:"g1", title:"Seth and the Shell", cover:"🐚", pages:[
+      ["Seth went to the beach.","🏖️"],["He sees a big pink shell.","🐚"],["Seth picks up the shell.","✋"],
+      ["A small crab is in it!","🦀"],["The crab runs back to the sand.","🦀"],["Seth sings a song and swims.","🏊"]],
+      q:["What was in the shell?",[["crab","🦀"],["fish","🐟"],["duck","🦆"]]] },
+    { id:"thump", level:"g1", title:"Thump in the Night", cover:"🌙", pages:[
+      ["Jill hears a thump in the night.","🌙"],["Thump! Is it a thing in the hall?","😮"],["Jill gets up and switches on the lamp.","💡"],
+      ["It is just the cat with a ball of string.","🐱"],["The cat jumps on the bed.","🛏️"],["Then Jill and the cat sleep.","😴"]],
+      q:["What made the thump?",[["cat","🐱"],["dog","🐶"],["frog","🐸"]]] },
     { id:"kite", level:"g2", title:"Jane and the Kite", cover:"🪁", pages:[
       ["Jane has a red kite.","🪁"],["She runs to the lake with it.","🏞️"],["The wind takes the kite up high.","🌬️"],
       ["It sails by a goat on a hill.","🐐"],["Then the rain came, so Jane ran home.","🌧️"],["Jane and her kite are wet, but safe.","🏠"]],
@@ -197,6 +242,18 @@ window.DATA = (() => {
       ["Bert has a farm with a big red barn.","🚜"],["A dark storm is on the way.","⛈️"],["Bert gets the horse and the goat.","🐴"],
       ["He takes them into the barn.","🛖"],["The storm is loud, but the barn keeps them dry.","☔"],["In the morning, the sun is out.","🌞"]],
       q:["Where did Bert take the horse and the goat?",[["barn","🛖"],["boat","⛵"],["car","🚗"]]] },
+    { id:"snow", level:"g2", title:"The Snow Day", cover:"❄️", pages:[
+      ["Rose woke up and saw snow on the ground.","❄️"],["She put on her coat, boots, and a scarf.","🧣"],["Rose and her brother made a snowman.","⛄"],
+      ["They gave him a carrot nose and a red hat.","🥕"],["Then they had hot cocoa by the fire.","☕"],["It was the best snow day ever.","😄"]],
+      q:["What was the snowman's nose?",[["carrot","🥕"],["apple","🍎"],["stick","🪵"]]] },
+    { id:"tooth", level:"g2", title:"The Loose Tooth", cover:"🦷", pages:[
+      ["Mark had a loose tooth.","🦷"],["He could wiggle it with his tongue.","😛"],["At lunch, he bit into a crunchy apple.","🍎"],
+      ["Crunch! The tooth came out!","🦷"],["That night, Mark put it under his pillow.","🛏️"],["In the morning, he found a shiny coin.","🪙"]],
+      q:["What did Mark bite when his tooth came out?",[["apple","🍎"],["bread","🍞"],["corn","🌽"]]] },
+    { id:"race", level:"g2", title:"Turtle and Hare", cover:"🐢", pages:[
+      ["Turtle and Hare had a race to the big oak tree.","🌳"],["Hare ran fast and was far ahead.","🐇"],["He stopped to take a nap under a bush.","😴"],
+      ["Turtle kept going, slow and steady.","🐢"],["When Hare woke up, Turtle was at the tree.","🌳"],["Turtle won the race!","🏆"]],
+      q:["Who won the race?",[["Turtle","🐢"],["Hare","🐇"],["Fox","🦊"]]] },
     { id:"garden", level:"g3", title:"The Secret Seed Box", cover:"🌻", pages:[
       ["Maya found an old wooden box behind the shed.","📦"],["Inside were packets of seeds and a folded note.","🌱"],["The note said, Plant me and wait.","📝"],
       ["Maya planted the seeds and watered them every morning.","💧"],["After three weeks, tiny green sprouts popped up.","🌿"],["By summer, her yard was full of bright sunflowers.","🌻"]],
@@ -205,6 +262,18 @@ window.DATA = (() => {
       ["Rex was a small robot who lived in a busy kitchen.","🤖"],["Every morning, he helped Dad make pancakes.","🥞"],["One day, Rex dropped a bowl of batter on the floor.","🥣"],
       ["Rex felt terrible, but Dad just laughed.","😄"],["Together they cleaned up the mess and started again.","🧽"],["The second batch of pancakes was the best ever.","⭐"]],
       q:["What did Dad do when Rex dropped the bowl?",[["He laughed.","😄"],["He yelled.","😠"],["He cried.","😢"]]] },
+    { id:"fair", level:"g3", title:"The Science Fair", cover:"🔬", pages:[
+      ["Lena wanted to know which paper towel was the strongest.","🔬"],["She tested three kinds by piling pennies on wet towels.","🪙"],["The first towel ripped after twelve pennies.","📄"],
+      ["The second towel held twenty pennies before it tore.","📄"],["The third towel held forty pennies and still did not rip.","💪"],["Lena won a blue ribbon for her careful testing.","🎗️"]],
+      q:["How many pennies did the third towel hold?",[["forty pennies","🪙"],["twelve pennies","🪙"],["twenty pennies","🪙"]]] },
+    { id:"owls", level:"g3", title:"Night Hunters", cover:"🦉", pages:[
+      ["Owls are birds that hunt at night.","🦉"],["Their large eyes help them see in the dark.","👀"],["An owl can turn its head almost all the way around.","🔄"],
+      ["Soft feathers let owls fly without making a sound.","🪶"],["They catch mice, insects, and even fish.","🐭"],["During the day, most owls rest in trees.","🌳"]],
+      q:["When do owls hunt?",[["at night","🌙"],["in the morning","🌅"],["at lunchtime","🥪"]]] },
+    { id:"jar", level:"g3", title:"The Kindness Jar", cover:"🫙", pages:[
+      ["Mr. Patel put an empty jar on his desk.","🫙"],["Each time a student did something kind, he added a marble.","🔵"],["Jamal helped a new student find the library.","📚"],
+      ["Ava shared her markers with the whole table.","🖍️"],["By Friday, the jar was full.","🫙"],["The class celebrated with a picnic outside.","🧺"]],
+      q:["Why did Mr. Patel add a marble?",[["Someone was kind.","💛"],["Someone was loud.","📢"],["Someone was late.","⏰"]]] },
     { id:"volcano", level:"g4", title:"Inside a Volcano", cover:"🌋", pages:[
       ["A volcano is an opening in the Earth's crust.","🌋"],["Deep underground, rock gets so hot that it melts into magma.","🔥"],["When pressure builds up, the magma pushes toward the surface.","⬆️"],
       ["Once it flows out of the volcano, magma is called lava.","🌋"],["The lava slowly cools and hardens into new rock.","🪨"],["Over many years, eruptions can build whole islands.","🏝️"]],
@@ -213,6 +282,18 @@ window.DATA = (() => {
       ["Grandpa Leo kept the lighthouse on the rocky coast.","🌊"],["Each night, he climbed one hundred steps to light the lamp.","🪜"],["One stormy evening, the lamp flickered and went dark.","🌩️"],
       ["Leo heard a ship's horn somewhere in the fog.","🚢"],["He quickly replaced the bulb, and the beam swept across the water.","💡"],["The ship turned safely away from the rocks.","⚓"]],
       q:["Why was the ship in danger?",[["The light went out.","🌩️"],["It ran out of fuel.","⛽"],["A whale bumped it.","🐋"]]] },
+    { id:"water", level:"g4", title:"The Water Cycle", cover:"💧", pages:[
+      ["Water on Earth is always on the move.","💧"],["The sun heats lakes and oceans, turning some water into vapor.","☀️"],["This process is called evaporation.","♨️"],
+      ["As the vapor rises, it cools and forms clouds. This is condensation.","☁️"],["When the drops get heavy, they fall as rain or snow.","🌧️"],["The water flows back to the ocean, and the cycle begins again.","🌊"]],
+      q:["What is it called when water turns into vapor?",[["evaporation","♨️"],["condensation","☁️"],["precipitation","🌧️"]]] },
+    { id:"mapmaker", level:"g4", title:"The Mapmaker's Helper", cover:"🧭", pages:[
+      ["In a busy port town, Tomas worked for an old mapmaker.","🧭"],["Each day he copied coastlines in careful ink.","🖋️"],["One morning, a sailor rushed in with a torn map.","📜"],
+      ["The sailor needed a safe harbor before the storm arrived.","⛈️"],["Tomas remembered a hidden cove from a map he had copied.","🗺️"],["Thanks to his memory, the ship reached shelter just in time.","⚓"]],
+      q:["How did Tomas help the sailor?",[["He remembered a hidden cove.","🧭"],["He fixed the ship.","🔧"],["He sailed the ship himself.","⛵"]]] },
+    { id:"monarch", level:"g4", title:"The Monarch Journey", cover:"🦋", pages:[
+      ["Every fall, millions of monarch butterflies fly south.","🦋"],["Some travel nearly three thousand miles to reach Mexico.","🗺️"],["They rest in the same mountain forests year after year.","🌲"],
+      ["No single butterfly makes the whole round trip.","🔄"],["Their great-grandchildren fly back north in the spring.","🌸"],["Scientists are still learning how monarchs find their way.","🔬"]],
+      q:["Where do many monarchs fly in the fall?",[["Mexico","🇲🇽"],["Canada","🇨🇦"],["Alaska","🏔️"]]] },
     { id:"bees", level:"g5", title:"Why Bees Matter", cover:"🐝", pages:[
       ["Honeybees do much more than make honey.","🐝"],["As they collect nectar, pollen sticks to their fuzzy bodies.","🌼"],["When they visit the next flower, some of that pollen rubs off.","🌸"],
       ["This process, called pollination, helps plants make fruit and seeds.","🍎"],["Bees help pollinate about one third of the food people eat.","🥕"],["Protecting bees means protecting our food supply.","🌍"]],
@@ -220,7 +301,19 @@ window.DATA = (() => {
     { id:"mars", level:"g5", title:"Mission to Mars", cover:"🔴", pages:[
       ["Captain Ortiz checked the screens one last time before landing.","👩‍🚀"],["Mars glowed a rusty red outside the small window.","🔴"],["The crew felt a jolt as the lander touched the dusty ground.","🛬"],
       ["Through her visor, Ortiz saw towering cliffs and a pale pink sky.","🏜️"],["She planted a flag and recorded a message for everyone back on Earth.","🚩"],["We made it, she said. This is only the beginning.","🚀"]],
-      q:["How does Captain Ortiz most likely feel at the end?",[["Proud and hopeful","😊"],["Bored and sleepy","😴"],["Angry and upset","😠"]]] }
+      q:["How does Captain Ortiz most likely feel at the end?",[["Proud and hopeful","😊"],["Bored and sleepy","😴"],["Angry and upset","😠"]]] },
+    { id:"press", level:"g5", title:"The Printing Press", cover:"📜", pages:[
+      ["Long ago, books in Europe were copied by hand.","✍️"],["A single book could take a scribe many months to finish.","📖"],["Then Johannes Gutenberg built a printing press with movable metal letters.","🖨️"],
+      ["Workers could now print hundreds of pages in a single day.","📄"],["Books became cheaper, and more people learned to read.","📚"],["Ideas spread faster than ever before, and that changed history.","💡"]],
+      q:["What was the biggest effect of the printing press?",[["Ideas spread faster.","💡"],["Books got heavier.","📚"],["Scribes worked longer.","✍️"]]] },
+    { id:"ridge", level:"g5", title:"Rescue on the Ridge", cover:"⛰️", pages:[
+      ["Priya tightened her pack as the trail grew steep.","🎒"],["Dark clouds gathered over the ridge, and the wind picked up.","🌩️"],["Halfway up, she spotted a hiker sitting on a rock, holding his ankle.","🦶"],
+      ["Priya shared her water and called the ranger station.","📱"],["Within an hour, two rangers arrived with a stretcher.","🚑"],["As they carried the hiker down, he thanked Priya again and again.","🙏"]],
+      q:["Why was the hiker sitting on the rock?",[["He hurt his ankle.","🦶"],["He was eating lunch.","🥪"],["He was waiting for a bus.","🚌"]]] },
+    { id:"reef", level:"g5", title:"Cities Under the Sea", cover:"🐠", pages:[
+      ["Coral reefs cover less than one percent of the ocean floor.","🌊"],["Yet about a quarter of all ocean species live on them.","🐠"],["Corals are tiny animals that build hard skeletons of limestone.","🪸"],
+      ["Colorful algae live inside the corals and make food from sunlight.","☀️"],["When the water gets too warm, corals lose their algae and turn white.","🤍"],["Protecting reefs helps all the creatures that depend on them.","🐢"]],
+      q:["What happens when the water gets too warm?",[["The corals turn white.","🤍"],["The corals grow faster.","📈"],["The fish get bigger.","🐟"]]] }
   ];
 
   // Spoken prompts (key -> text). Each becomes audio/p_<key>.mp3
@@ -252,6 +345,10 @@ window.DATA = (() => {
     clap: ["👏", "Clap It", "Clap the parts of a word", "Phonemic awareness: syllables"],
     boxes: ["🟦", "Sound Boxes", "How many sounds in a word?", "Elkonin boxes: segmenting sounds"],
     lastsound: ["🔚", "Last Sound", "What sound does it end with?", "Phonemic awareness: ending sounds"],
+    letters: ["🔠", "Letter Match", "Match big and small letters", "Letter shapes, look-alikes like b d p q"],
+    missing: ["🔡", "Missing Letters", "Look at the picture, fill the gap", "Spelling by sight"],
+    same: ["👀", "Same Word", "Find the word that looks the same", "Careful looking: was / saw, b / d"],
+    riddle: ["🕵️", "Riddles", "Read a riddle, find the picture", "Reading for meaning"],
     tricky: ["❤️", "Heart Words", "Learn tricky words by heart", "Heart words: sound out what you can, learn the rest by heart"],
     vocab: ["💬", "Word Meaning", "Read a word, pick what it means", "Vocabulary"],
     stories: ["📖", "Storybook", "Read a little story yourself", "Stories and questions"]

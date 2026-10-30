@@ -33,11 +33,12 @@ Reading activities:
 - **Blend It / Chunk It:** sound out a word tile by tile (or chunk by chunk from 3rd grade), by picking its picture; a "Sound it out for me" button models the blending
 - **Build a Word:** movable alphabet, or syllable tiles from 3rd grade; wrong tiles play their own sound (control of error)
 - **Read & Match:** read a word alone and pick its picture
+- **Picture games** (play without sound): **Letter Match** (capital to small letter, with look-alikes like b d p q), **Missing Letters** (picture plus a word with a gap: the vowel in K, sh ch th ck ng in 1st, vowel teams and bossy r in 2nd), **Same Word** (find the exact spelling among look-alikes like was / saw), **Riddles** (read a short riddle and pick its picture, 1st to 3rd)
 - **❤️ Heart Words:** sight words by grade, Pre-K to 3rd; the letters that don't follow the rules are marked with a heart and the rest is sounded out
 - **Word Meaning:** read a word and pick its meaning (3rd to 5th)
-- **Storybook:** fifteen stories from decodable K stories to 5th-grade passages, with tap-a-word help and a question at the end
+- **Storybook:** 38 stories, at least four for every grade: read-to-me picture books for Pre-K, decodable stories for K and 1st, up to 5th-grade fiction and non-fiction passages, with tap-a-word help and a question at the end
 
-Math activities include Number Cards (three-period lesson), Quick Look (dice and ten frames flashed for a moment), Number Bonds, Number Line, Trace Numbers (sandpaper numerals), golden beads for place value, ten frames, clocks, coins, fraction pictures, area grids and a number pad. After two misses the answer is shown and the problem comes back sooner.
+Math activities include Number Cards (three-period lesson), Quick Look (dice and ten frames flashed for a moment), Number Bonds, Number Line, picture games with no listening needed (Odd One Out, Measure It with bars, cubes and a ruler, Picture Graph), Trace Numbers (sandpaper numerals), golden beads for place value, ten frames, clocks, coins, fraction pictures, area grids and a number pad. After two misses the answer is shown and the problem comes back sooner.
 
 Practice is chosen by spaced repetition: nothing repeats back-to-back, missed items come back sooner, mastered ones less often, and new items (letter sounds in Montessori order, math facts from easiest) come in a couple at a time.
 

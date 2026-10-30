@@ -33,6 +33,9 @@ window.MATH = (() => {
   // Math prompts (clip name -> text)
   const PHRASES = {
     m_howmany:"How many?", m_quicklook:"Quick look! How many did you see?", m_numline:"What number is the arrow pointing to?", m_make:"make", m_whichmany:"Which group has this many?", m_whatnum:"What number is this?", m_tracenum:"Trace the number with your finger. Say its name.",
+    m_oddone:"Which one does not belong?", m_graphhow:"Look at the graph. How many are there?", m_graphmost:"Look at the graph. Which has the most?",
+    m_graphleast:"Look at the graph. Which has the least?", m_graphmore:"Look at the graph. How many more?", m_graphall:"Look at the graph. How many in all?",
+    m_longest:"Which one is the longest?", m_shortest:"Which one is the shortest?", m_cubes:"How many cubes long is it?", m_ruler:"How many centimeters long is it?", m_cm:"centimeters",
     m_more:"Which group has more?", m_fewer:"Which group has fewer?", m_bigger:"Which number is bigger?", m_smaller:"Which number is smaller?",
     m_sign:"Which sign goes in the middle?", m_greater:"is greater than", m_less:"is less than", m_equal:"is equal to",
     m_next:"What comes next?", m_whatis:"What is", m_plus:"plus", m_minus:"minus", m_times:"times", m_divby:"divided by", m_equals:"equals",
@@ -449,16 +452,72 @@ window.MATH = (() => {
       return { q:"What number is the arrow pointing to?", say:["m_numline"], vis, ans:String(target), choices:numChoices([...new Set([target, target + (g === "g2" ? 5 : 1), target - (g === "g2" ? 5 : 1), target + (g === "g2" ? 10 : 2)])].filter(v => v >= 0 && v <= max).slice(0, 3)), after:N(target) };
     } };
 
+  // ---------- picture games (they can be played without sound) ----------
+  // Odd One Out: sorting by what things are (Pre-K: one looks different; K: one is from another group)
+  const GROUPS = { fruit:["🍎","🍌","🍇","🍓","🍐","🍊","🍉"], animals:["🐶","🐱","🐰","🐻","🐷","🐮","🐸"], vehicles:["🚗","🚌","🚲","🚂","🚁","⛵","🚀"],
+    clothes:["👕","👖","🧦","🧢","👗","🧤","👟"], weather:["☀️","🌧️","❄️","🌈","⛅","⚡"], tools:["🔨","🪛","🔧","🪚","🪓"] };
+  const LOOKALIKE = [["🍎","🍏"],["🔴","🔵"],["⭐","🌙"],["🐶","🐱"],["🟥","🟦"],["🔺","🔷"],["🌸","🌻"],["🚗","🚕"],["🍪","🍩"],["⚽","🏀"]];
+  SK.oddone = { name:"Odd One Out", ico:"🔍", tag:"Sorting",
+    gen(g) {
+      let items, odd;
+      if (g === "prek") { const [a, b] = shuffle(one(LOOKALIKE)); items = [a, a, a]; odd = b; }
+      else { const [ga, gb] = shuffle(Object.keys(GROUPS)); items = shuffle(GROUPS[ga]).slice(0, 3); odd = one(GROUPS[gb]); }
+      const all = shuffle([...items.map(e => [e, 0]), [odd, 1]]);
+      return { q:"Which one does <b>not</b> belong?", say:["m_oddone"], vis:"", ans:String(all.findIndex(([, o]) => o)),
+        choices:all.map(([e], i) => ({ v:String(i), html:`<span class="emo">${e}</span>` })), after:["p_correct"] };
+    } };
+  // Picture Graph: read a pictograph (2nd: compare rows; 3rd: each picture stands for 2)
+  SK.graph = { name:"Picture Graph", ico:"📊", tag:"Reading graphs",
+    gen(g) {
+      const kinds = shuffle(["🍎","🍌","🍇","🍓","🍊"]).slice(0, g === "g1" ? 3 : 4), per = g === "g3" ? 2 : 1;
+      let counts; do { counts = kinds.map(() => ri(1, g === "g1" ? 7 : 8) * per); } while (new Set(counts).size < kinds.length);
+      const rows = kinds.map((k, i) => `<div class="pgrow"><span class="pglab">${k}</span><span class="pgbar">${k.repeat(counts[i] / per)}</span></div>`).join("");
+      const vis = `<div class="pgraph">${rows}${per > 1 ? `<small class="pgkey">Each picture = ${per}</small>` : ""}</div>`;
+      const kind = g === "g1" ? one(["how", "how", "most", "least"]) : g === "g2" ? one(["how", "more", "more", "most"]) : one(["how", "more", "all"]);
+      const [i, j] = shuffle(range(0, kinds.length - 1)), [hi, lo] = counts[i] > counts[j] ? [i, j] : [j, i];
+      if (kind === "most" || kind === "least") {
+        const pick = counts.indexOf(kind === "most" ? Math.max(...counts) : Math.min(...counts));
+        return { q:`Which fruit has the <b>${kind}</b>?`, say:[kind === "most" ? "m_graphmost" : "m_graphleast"], vis, ans:kinds[pick],
+          choices:kinds.map(k => ({ v:k, html:`<span class="emo">${k}</span>` })) };
+      }
+      if (kind === "how") return { q:`How many ${kinds[i]} are there?`, say:["m_graphhow"], vis, ans:String(counts[i]), choices:near(counts[i], 3, 2 * per, 1), after:N(counts[i]) };
+      if (kind === "more") { const d = counts[hi] - counts[lo];
+        return { q:`How many more ${kinds[hi]} than ${kinds[lo]}?`, say:["m_graphmore"], vis, ans:String(d), choices:near(d, 3, 2 * per, 1), after:N(d) }; }
+      const t = counts[i] + counts[j];
+      return { q:`How many ${kinds[i]} and ${kinds[j]} in all?`, say:["m_graphall"], vis, ans:String(t), choices:near(t, 3, 2 * per, 1), after:N(t) };
+    } };
+  // Measure It: K compares lengths, 1st measures with cubes, 2nd reads a ruler
+  const bar = (len, color, unit, y = 10) => `<rect x="20" y="${y}" width="${len * unit}" height="22" rx="11" fill="${color}"/>`;
+  SK.measure = { name:"Measure It", ico:"📏", tag:"Length",
+    gen(g) {
+      if (g === "k") {
+        const lens = shuffle([3, 5, 7, 9, 11]).slice(0, 3), long = Math.random() < .6, cols = ["#E8505B", "#3E8EDE", "#F2B33D"];
+        const ans = String(lens.indexOf(long ? Math.max(...lens) : Math.min(...lens)));
+        return { q:`Which one is the <b>${long ? "longest" : "shortest"}</b>?`, say:[long ? "m_longest" : "m_shortest"], vis:"", stack:true, ans,
+          choices:lens.map((l, i) => ({ v:String(i), html:`<svg viewBox="0 0 320 42" class="mbar">${bar(l, cols[i], 25)}</svg>` })) };
+      }
+      if (g === "g1") {
+        const n = ri(2, 10), u = 28, cubes = range(0, n - 1).map(i => `<rect x="${20 + i * u}" y="44" width="${u - 2}" height="${u - 2}" rx="4" fill="#7FC8A9" stroke="#2E7D5B" stroke-width="2"/>`).join("");
+        return { q:"How many cubes long is the ribbon?", say:["m_cubes"], vis:`<svg viewBox="0 0 320 80" class="mbar big">${bar(n, "#E8505B", u)}${cubes}</svg>`,
+          ans:String(n), choices:near(n, 3, 2, 1), after:N(n) };
+      }
+      // 2nd grade: a centimeter ruler; sometimes the ribbon doesn't start at 0
+      const start = Math.random() < .35 ? ri(1, 3) : 0, n = ri(2, 12 - start), u = 26, x = v => 20 + v * u;
+      const ticks = range(0, 12).map(v => `<line x1="${x(v)}" y1="40" x2="${x(v)}" y2="56" stroke="#17203F" stroke-width="2"/><text x="${x(v)}" y="76" text-anchor="middle" font-size="17" font-weight="700" fill="#17203F">${v}</text>`).join("");
+      const vis = `<svg viewBox="0 0 352 84" class="mbar big"><rect x="8" y="38" width="336" height="46" rx="4" fill="#F7D774" opacity=".55"/><rect x="${x(start)}" y="6" width="${n * u}" height="26" rx="13" fill="#3E8EDE"/>${ticks}</svg>`;
+      return { q:`How many centimeters long is the ribbon?${start ? " Look where it starts!" : ""}`, say:["m_ruler"], vis, ans:String(n), choices:near(n, 3, 2, 1), after:[...N(n), "m_cm"] };
+    } };
+
   // The skills each grade shows: [skill, short description, name override]
   const GRADE_SKILLS = {
-    prek:[["numcards", "Numbers 0 to 10"], ["quicklook", "See up to 5 at a glance"], ["count", "Count up to 10 things"], ["tracenum", "Trace 0 to 9"], ["compare", "Which group has more?"], ["shapes", "Circle, square, triangle"], ["pattern", "What comes next?"]],
+    prek:[["numcards", "Numbers 0 to 10"], ["quicklook", "See up to 5 at a glance"], ["count", "Count up to 10 things"], ["tracenum", "Trace 0 to 9"], ["compare", "Which group has more?"], ["shapes", "Circle, square, triangle"], ["pattern", "What comes next?"], ["oddone", "Which one is different?"]],
     k:[["numcards", "Numbers 0 to 20"], ["quicklook", "See up to 10 at a glance"], ["count", "Count up to 20 things"], ["bonds", "Parts that make 3 to 10"], ["add", "Add within 10 with pictures"], ["sub", "Take away within 10"],
-      ["make10", "How many more make 10?"], ["numline", "Number line 0 to 10"], ["compare", "Which number is bigger?"], ["tracenum", "Trace 0 to 20"], ["shapes", "Flat and solid shapes"], ["pattern", "Trickier patterns"]],
-    g1:[["add", "Add within 20"], ["sub", "Subtract within 20"], ["bonds", "Number bonds to 20"], ["make10", "Make 10 fast"], ["placevalue", "Tens and ones"], ["numline", "Number line 0 to 20"], ["compare", "Greater than, less than"], ["time", "Hour and half hour"]],
+      ["make10", "How many more make 10?"], ["numline", "Number line 0 to 10"], ["compare", "Which number is bigger?"], ["tracenum", "Trace 0 to 20"], ["shapes", "Flat and solid shapes"], ["pattern", "Trickier patterns"], ["oddone", "Sort into groups"], ["measure", "Longest and shortest"]],
+    g1:[["add", "Add within 20"], ["sub", "Subtract within 20"], ["bonds", "Number bonds to 20"], ["make10", "Make 10 fast"], ["placevalue", "Tens and ones"], ["numline", "Number line 0 to 20"], ["compare", "Greater than, less than"], ["time", "Hour and half hour"], ["graph", "Read a picture graph"], ["measure", "Measure with cubes"]],
     g2:[["add", "Add 2-digit numbers"], ["sub", "Subtract 2-digit numbers"], ["placevalue", "Hundreds, tens and ones"], ["skip", "Count by 2s, 5s, 10s, 100s"], ["numline", "Number line 0 to 100"],
-      ["evenodd", "Even or odd?"], ["money", "Count coins"], ["time", "Time to 5 minutes"], ["compare", "Compare 3-digit numbers"]],
+      ["evenodd", "Even or odd?"], ["money", "Count coins"], ["time", "Time to 5 minutes"], ["compare", "Compare 3-digit numbers"], ["graph", "Compare on a graph"], ["measure", "Measure with a ruler"]],
     g3:[["mult", "Times tables to 10 × 10"], ["div", "Division facts"], ["fractions", "Name the fraction"], ["round", "Round to 10 and 100"],
-      ["area", "Area with squares"], ["time", "Time to the minute"], ["add", "Add 3-digit numbers"], ["sub", "Subtract 3-digit numbers"]],
+      ["area", "Area with squares"], ["graph", "Graphs where 1 picture = 2"], ["time", "Time to the minute"], ["add", "Add 3-digit numbers"], ["sub", "Subtract 3-digit numbers"]],
     g4:[["mult", "Multiply by 1 digit"], ["div", "Divide with remainders"], ["fractions", "Equivalent and compare"], ["decimals", "Tenths and hundredths"],
       ["placevalue", "Value of a digit"], ["round", "Round big numbers"], ["factors", "Factors and primes"], ["area", "Area and perimeter"]],
     g5:[["fractions", "Add, subtract, multiply"], ["decimals", "Decimal operations"], ["mult", "2-digit by 2-digit"], ["div", "Divide by 2 digits"],

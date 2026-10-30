@@ -15,7 +15,8 @@ window.Audio2 = (() => {
   const status = { path: "", error: "", ios: IOS };
   try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
 
-  const url = name => "audio/" + name + ".mp3";
+  // VOICE changes when the clips are re-recorded, so no cache anywhere can hand back an old recording
+  const VOICE = "kokoro1", url = name => "audio/" + name + ".mp3?voice=" + VOICE;
   // Keep only the most recently used clips in memory (a decoded clip is ~150 KB), so long sessions stay light.
   const LIMIT = 150;
   function remember(map, name, make, drop) {
