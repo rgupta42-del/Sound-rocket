@@ -134,7 +134,7 @@ def longest_run(mask, gap=2):
             if miss > gap: start = None
     return best
 
-def vowel_of(word, secs=.45, skip=.03):
+def vowel_of(word, secs=.45, skip=.03):   # no longer used for the vowels (see vowel_ph); kept for experiments
     """the voiced stretch of a word whose vowel sits between unvoiced sounds (sit, set, seat...)"""
     # a vowel is loud with its energy low in the spectrum (fricatives and bursts are weak or hissy)
     x = clean(tts(word, .75)); e = rms(x); m = e.max(); c = centroids(x)[: len(e)]
@@ -142,33 +142,46 @@ def vowel_of(word, secs=.45, skip=.03):
     seg = x[a * F + int(SR * skip): b * F - int(SR * .015)]
     return hold(seg, secs)
 
+def vowel_ph(ph):
+    """a vowel said on its own by the voice model from its phonetic spelling ("æ", "eɪ"), after the same pause trick as tts().
+    Long vowels say their name (ai = "A", igh = "I"); cutting them out of words and looping them lost the glide, so "ai" came out "eh"."""
+    x, sr = K.create("oʊkˈeɪ... " + ph + ".", voice=VOICE, speed=.8, lang="en-us", is_phonemes=True)
+    x = x.astype(np.float64); db = 20 * np.log10(rms(x) + 1e-9); quiet = db < db.max() - 35; run = 0
+    for i, q in enumerate(quiet):
+        run = run + 1 if q else 0
+        if run >= 12 and not quiet[i + 1:].all():
+            start = next(j for j in range(i, len(quiet)) if not quiet[j])
+            return fade(clean(x[max(start - 2, 0) * F:]), .01, .06)
+    raise RuntimeError(f"no pause found before /{ph}/")
+
 def coda(word):
     """ng, x: the sound after the vowel's loud part (sing, box)"""
     x = clean(tts(word, .75)); e = rms(x); m = e.max()
     peak = int(np.argmax(e)); end = next((i for i in range(peak, len(e)) if e[i] < m * .35), len(e) - 1)
     return x[end * F:]
 
-def stop(word, vowel_ms=45, maxlen=.24):
-    """b, d, p, t, k, j, ch...: from the release to just after the vowel starts"""
+def stop(word, vowel_ms=20, minlen=.09, maxlen=.24):
+    """b, d, p, t, k, j, ch...: from the release to just after the vowel starts, with as little vowel as can still be heard,
+    so it's "p", not "puh" (w, y and qu are glides and need a bit more)"""
     x = clean(tts(word, .8)); e = rms(x); m = e.max()
     on = next(i for i, v in enumerate(e) if v > m * .04)
     vs = first_voiced(x, on + 1) or on + 6
     end = vs * F + int(SR * vowel_ms / 1000)
-    seg = x[on * F: min(max(end, on * F + int(SR * .11)), on * F + int(SR * maxlen))]   # at least 110 ms, so it's audible
-    return fade(seg, .003, .05)
+    seg = x[on * F: min(max(end, on * F + int(SR * minlen)), on * F + int(SR * maxlen))]
+    return fade(seg, .003, .04)
 
 def build_sounds():
     S = {}
     for k, w in [("s", "sat"), ("f", "fat"), ("sh", "shop"), ("th", "thin")]: S[k] = unvoiced_onset(w)
     for k, w in [("m", "mat"), ("n", "nap"), ("l", "lap"), ("v", "van"), ("r", "rat")]: S[k] = voiced_onset(w)
     S["z"] = buzz_onset("zip")
-    for k, w in [("a", "sat"), ("e", "set"), ("i", "sit"), ("o", "sock"), ("u", "cut"), ("ee", "seat"), ("oo", "shoot"),
-                 ("ay", "say"), ("igh", "sight"), ("oa", "soap"), ("er", "fur"), ("ar", "far"), ("or", "for")]: S[k] = vowel_of(w)
-    S["ue"] = clean(tts("you", .75))
+    for k, ph in [("a", "ˈæ"), ("e", "ˈɛ"), ("i", "ˈɪ"), ("o", "ˈɑː"), ("u", "ˈʌʌ"), ("ee", "ˈiː"), ("oo", "ˈuː"), ("ay", "ˈeɪ"), ("igh", "ˈaɪ"),
+                  ("oa", "ˈoʊ"), ("ue", "jˈuː"), ("er", "ˈɜːɹ"), ("ar", "ˈɑːɹ"), ("or", "ˈɔːɹ")]: S[k] = vowel_ph(ph)
     # stops come from words with the neutral "uh" vowel, so the sliver of vowel left on is the clipped one teachers use
     for k, w in [("b", "but"), ("d", "dug"), ("g", "gum"), ("p", "pup"), ("t", "tub"), ("c", "cup"), ("k", "cut"), ("j", "jug"), ("ch", "chug"),
                  ("h", "hug"), ("w", "won"), ("y", "yum"), ("qu", "quack")]:
-        S[k] = stop(w, 70 if k in ("w", "y", "qu", "h") else 55, .3 if k in ("qu", "ch", "j") else .2)
+        S[k] = stop(w, *{"w": (70, .11), "y": (70, .11), "qu": (70, .11)}.get(k, (15, .09) if k in ("p", "t", "c", "k", "ch", "h") else (35, .09)),
+                    .3 if k in ("qu", "ch", "j") else .2)
     S["ck"] = S["k"]
     S["ng"] = hold(coda("sing"), .5)
     S["x"] = fade(coda("box"), .005, .05)
