@@ -8,7 +8,8 @@ Usage: python3 tools/build_audio.py /path/to/kokoro_dir [section ...] [--force]
 
 Letter sounds can't be read reliably by any text-to-speech voice on their own, so each one is cut out of a
 clearly spoken donor word (/θ/ from "thin", /iː/ from "seat") and then shaped the way phonics teachers say it:
-continuous sounds (mmm, sss, thhh, eee) are held for about half a second by looping their steady middle, and
+continuous consonants (mmm, sss, thhh) are held for about half a second with a time-stretch (never by repeating a
+slice, which stutters), vowels are said by the voice from their phonetic spelling, and
 stop sounds (b, d, t...) keep only the burst and a sliver of the next vowel, so "b" not "buh".
 """
 import json, os, subprocess, sys
@@ -78,17 +79,26 @@ def save(name, x, quiet=None):
     assert p.returncode == 0
 
 # ---------- letter sounds ----------
-def hold(seg, secs=.55):
-    """sustain a steady sound by looping its middle with crossfades (no pitch or speed change)"""
-    n = len(seg); assert n > SR * .02, f"cut came out too short ({n} samples)"
-    mid = seg[int(n * .25): int(n * .75)]
-    if len(mid) < SR * .04: mid = seg
-    out, xf = seg[: int(n * .25)].copy(), int(SR * .02)
-    while len(out) < SR * secs:
-        if len(out) >= xf and len(mid) > 2 * xf:
-            ramp = np.linspace(0, 1, xf); out[-xf:] = out[-xf:] * (1 - ramp) + mid[:xf] * ramp; out = np.concatenate([out, mid[xf:]])
-        else: out = np.concatenate([out, mid])
-    return fade(out[: int(SR * secs)], .04, .09)
+def stretch(seg, secs=.55):
+    """hold a sound for about `secs` with ffmpeg's atempo time-stretch: no pitch change, and its overlaps are lined up
+    with the waveform, so the sound stays smooth. (Looping a slice of the sound made "nnn" flutter like "no-no-no".)"""
+    assert len(seg) > SR * .03, f"cut came out too short ({len(seg)} samples)"
+    t, chain = len(seg) / (SR * (secs + .1)), []
+    while t < .5: chain.append("atempo=0.5"); t /= .5
+    chain.append(f"atempo={t:.4f}")
+    p = subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "f64le", "-ar", str(SR), "-ac", "1", "-i", "-", "-af", ",".join(chain), "-f", "f64le", "-"],
+                       input=seg.astype(np.float64).tobytes(), capture_output=True)
+    assert p.returncode == 0, p.stderr
+    return fade(np.frombuffer(p.stdout, np.float64)[: int(SR * secs)], .04, .09)
+
+def lowness(x):
+    """per 10 ms frame: mid-band (500-2500 Hz) energy over low-band (80-400 Hz) energy, in dB. Nasals and other
+    voiced consonants sit far below the vowel that follows them (about -25 dB against 0 dB for "n" in "nap")."""
+    out = []
+    for i in range(0, max(1, len(x) - F), F):
+        y = x[i:i + 2 * F]; X = np.abs(np.fft.rfft(y * np.hanning(len(y)))) ** 2; f = np.fft.rfftfreq(len(y), 1 / SR)
+        out.append(10 * np.log10((X[(f > 500) & (f < 2500)].sum() + 1e-12) / (X[(f > 80) & (f < 400)].sum() + 1e-12)))
+    return np.array(out)
 
 def centroids(x):
     """spectral centre of each 10 ms frame, in Hz"""
@@ -105,21 +115,17 @@ def first_voiced(x, start=0):
     return None
 
 def unvoiced_onset(word, secs=.55):
-    """s, f, sh, th: the noise before the vowel starts"""
-    x = clean(tts(word, .75)); vs = first_voiced(x)
-    return hold(x[: max(vs - 1, 4) * F], secs)
+    """s, f, sh, th: the hiss before the vowel starts, from the word said slowly"""
+    x = clean(tts(word, .55)); vs = first_voiced(x)
+    return stretch(x[F: max(vs - 1, 5) * F], secs)
 
 def voiced_onset(word, secs=.55):
-    """m, n, l, v, z, r: the consonant before the vowel gets loud"""
-    x = clean(tts(word, .75)); e = rms(x); m = e.max()
-    vstart = next(i for i, v in enumerate(e) if v > m * .55)
-    return hold(x[: max(vstart - 1, 5) * F], secs)
-
-def buzz_onset(word, secs=.55):
-    """z: the buzzy hiss before the vowel (the hum of voicing before it is left off, or it sounds like "mmm")"""
-    x = clean(tts(word, .75)); e = rms(x); m = e.max(); c = centroids(x)[: len(e)]; peak = int(np.argmax(e))
-    a, b = longest_run((e[:peak] > m * .05) & (c[:peak] > 2500))
-    return hold(x[a * F: b * F], secs)
+    """m, n, l, v, z, r: the consonant before the vowel, cut where the sound jumps up into the vowel's frequencies"""
+    x = clean(tts(word, .55)); e = rms(x); m = e.max(); r = lowness(x)[: len(e)]
+    on = next(i for i, v in enumerate(e) if v > m * .1)
+    base = np.median(r[on: on + 5])
+    end = next(i for i in range(on + 3, len(r)) if r[i] > base + 7)
+    return stretch(x[(on + 1) * F: (end - 1) * F], secs)
 
 def longest_run(mask, gap=2):
     """(start, end) frames of the longest run of True, bridging gaps of up to `gap` frames"""
@@ -140,7 +146,7 @@ def vowel_of(word, secs=.45, skip=.03):   # no longer used for the vowels (see v
     x = clean(tts(word, .75)); e = rms(x); m = e.max(); c = centroids(x)[: len(e)]
     a, b = longest_run((e[: len(c)] > m * .3) & (c < 1800))
     seg = x[a * F + int(SR * skip): b * F - int(SR * .015)]
-    return hold(seg, secs)
+    return stretch(seg, secs)
 
 def vowel_ph(ph):
     """a vowel said on its own by the voice model from its phonetic spelling ("æ", "eɪ"), after the same pause trick as tts().
@@ -153,6 +159,12 @@ def vowel_ph(ph):
             start = next(j for j in range(i, len(quiet)) if not quiet[j])
             return fade(clean(x[max(start - 2, 0) * F:]), .01, .06)
     raise RuntimeError(f"no pause found before /{ph}/")
+
+def nasal_coda(word):
+    """ng: the humming stretch at the end of "sing", where the sound sinks lowest (the vowel before it sits higher)"""
+    x = clean(tts(word, .55)); e = rms(x); m = e.max(); r = lowness(x)[: len(e)]
+    a, b = longest_run((e > m * .3) & (r < -14))
+    return x[(a + 1) * F: (b - 1) * F]
 
 def coda(word):
     """ng, x: the sound after the vowel's loud part (sing, box)"""
@@ -173,8 +185,7 @@ def stop(word, vowel_ms=20, minlen=.09, maxlen=.24):
 def build_sounds():
     S = {}
     for k, w in [("s", "sat"), ("f", "fat"), ("sh", "shop"), ("th", "thin")]: S[k] = unvoiced_onset(w)
-    for k, w in [("m", "mat"), ("n", "nap"), ("l", "lap"), ("v", "van"), ("r", "rat")]: S[k] = voiced_onset(w)
-    S["z"] = buzz_onset("zip")
+    for k, w in [("m", "mat"), ("n", "nap"), ("l", "lap"), ("v", "van"), ("z", "zip"), ("r", "rat")]: S[k] = voiced_onset(w)
     for k, ph in [("a", "ˈæ"), ("e", "ˈɛ"), ("i", "ˈɪ"), ("o", "ˈɑː"), ("u", "ˈʌʌ"), ("ee", "ˈiː"), ("oo", "ˈuː"), ("ay", "ˈeɪ"), ("igh", "ˈaɪ"),
                   ("oa", "ˈoʊ"), ("ue", "jˈuː"), ("er", "ˈɜːɹ"), ("ar", "ˈɑːɹ"), ("or", "ˈɔːɹ")]: S[k] = vowel_ph(ph)
     # stops come from words with the neutral "uh" vowel, so the sliver of vowel left on is the clipped one teachers use
@@ -183,7 +194,7 @@ def build_sounds():
         S[k] = stop(w, *{"w": (70, .11), "y": (70, .11), "qu": (70, .11)}.get(k, (15, .09) if k in ("p", "t", "c", "k", "ch", "h") else (35, .09)),
                     .3 if k in ("qu", "ch", "j") else .2)
     S["ck"] = S["k"]
-    S["ng"] = hold(coda("sing"), .5)
+    S["ng"] = stretch(nasal_coda("sing"), .5)
     S["x"] = fade(coda("box"), .005, .05)
     for k, x in S.items():
         print("sound", k, round(len(x) / SR, 2), "s", flush=True)
