@@ -40,6 +40,16 @@ Reading activities:
 
 Math activities include Number Cards (three-period lesson), Quick Look (dice and ten frames flashed for a moment), Number Bonds, Number Line, picture games with no listening needed (Odd One Out, Measure It with bars, cubes and a ruler, Picture Graph), Trace Numbers (sandpaper numerals), golden beads for place value, ten frames, clocks, coins, fraction pictures, area grids and a number pad. After two misses the answer is shown and the problem comes back sooner.
 
+**🔀 Mixed Review** appears once two activities on a planet have a star: one round mixing questions from everything already played there, favouring the weakest activities (spaced and interleaved practice). It doesn't count toward opening planets.
+
+**Learning design**, from research on how children learn:
+- Spaced and mixed-up practice (spaced repetition for every item, plus Mixed Review). Spacing and interleaving help math and reading stick far longer than blocked practice.
+- Process praise: "Careful looking!", "You kept trying, and you got it!", never "smart" (Mueller & Dweck 1998; Gunderson et al. 2013).
+- Repeated reading for fluency: stories invite a second and third read, and the shelf shows how often each was read.
+- Dialogic reading: every finished story ends with a question for a grown-up to talk through with the child.
+- Montessori control of error: wrong answers explain themselves ("That's a dog. Not quite"), and after two misses the answer is shown.
+- Active, engaged, meaningful learning (Hirsh-Pasek et al. 2015): every screen asks the child to do something, and rewards are tied to learning, not to watching.
+
 Practice is chosen by spaced repetition: nothing repeats back-to-back, missed items come back sooner, mastered ones less often, and new items (letter sounds in Montessori order, math facts from easiest) come in a couple at a time.
 
 The grown-ups area shows stars and minutes per day for two weeks (split into reading and math), a daily goal of 20 stars, streaks, which letter sounds he knows, words mastered per grade, stories read, math progress per grade, and items that need more practice. Progress is stored on the device (browser storage), separately for each child; progress from the earlier three-planet version carries over (Moon Base words count as K, Mars and Saturn as 1st grade).

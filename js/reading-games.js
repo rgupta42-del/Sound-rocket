@@ -80,6 +80,7 @@ window.READGAMES = (() => {
     } };
 
   // ---------- picture and look-alike games (they can be played without sound) ----------
+  const LSN = x => SN(x === "q" ? "qu" : x);   // q is always said with its u ("kw")
   const LETTER = x => `<span class="letter" style="color:var(${isVowel(x) ? "--vowel" : "--cons"})">${x}</span>`;
   // Letter Match: capital to small letter, with the look-alikes children mix up
   const LOOKS = { a:"oe", b:"dpq", c:"eo", d:"bpq", e:"ac", f:"tl", g:"qy", h:"nb", i:"lj", j:"ig", k:"xh", l:"it", m:"nw", n:"muh", o:"ca", p:"qbd", q:"pgd", r:"nh",
@@ -89,7 +90,7 @@ window.READGAMES = (() => {
     gen(g, key) {
       const l = key.split(":")[2], ds = shuffle(LOOKS[l].split("")).slice(0, 2);
       return { q:"Find the small letter that matches", say:["p_matchletter"], vis:`<div class="bigletter">${l.toUpperCase()}</div>`, ans:l,
-        choices:shuffle([l, ...ds]).map(x => ({ v:x, html:LETTER(x), say:[SN(x)] })), after:[SN(l)] };
+        choices:shuffle([l, ...ds]).map(x => ({ v:x, html:LETTER(x), say:[LSN(x)] })), after:[LSN(l)] };
     } };
   // Missing Letters: look at the picture and the word, pick what fills the gap (K: the vowel; 1st: sh ch th ck ng; 2nd: vowel teams and bossy r)
   const MISS = {

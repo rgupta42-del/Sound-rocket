@@ -15,9 +15,13 @@ const isVowel = t => D.VOWELS.includes(D.SOUND_CLIP[t] || t);
 const tileClass = t => isVowel(t) ? "v" : "c";
 // a word tile: vowel sounds blue, consonants red, silent letters grey, syllable chunks dark
 const partClass = p => p.kind === "chunk" ? "k" : p.kind === "silent" ? "x" : tileClass(p.s);
-const CHEERS = ["p_great", "p_gotit", "p_awesome", "p_super", "p_yes", "p_wow", "p_nice"];
-const MATH_CHEERS = ["p_great", "p_gotit", "p_awesome", "p_yes", "p_wow", "p_nice", "p_correct", "p_smart"];
-const cheer = () => { const c = St.S.subject !== "reading" ? MATH_CHEERS : CHEERS; return c[Math.floor(Math.random() * c.length)]; };
+// Praise names what the child did (looked carefully, kept trying), not how clever they are: children praised for
+// effort and strategy take on harder work and bounce back from mistakes (Mueller & Dweck 1998, Gunderson et al. 2013).
+const CHEERS = ["p_great", "p_gotit", "p_awesome", "p_super", "p_yes", "p_nice", "p_careful"];
+const MATH_CHEERS = ["p_great", "p_gotit", "p_awesome", "p_yes", "p_nice", "p_correct", "p_worked", "p_careful"];
+const AFTER_MISS = ["p_kepttrying", "p_figured", "p_worked"];
+const any = a => a[Math.floor(Math.random() * a.length)];
+const cheer = (miss = 0) => any(miss ? AFTER_MISS : St.S.subject !== "reading" ? MATH_CHEERS : CHEERS);
 
 // ---------- content helpers ----------
 const GRADE = id => D.GRADES.find(g => g.id === id) || D.GRADES[0];
@@ -132,10 +136,11 @@ function checkUnlocks() {
 // ---------- ROUNDS: each activity is played in short rounds with a finish line ----------
 // 10 questions (6 on Pre-K and K), fewer if the activity has fewer different questions; no repeats inside a round.
 let round = null;
-const ACT_SCREENS = ["sounds", "trace", "ispy", "blend", "build", "match", "tricky", "vocab", "rhyme", "clap", "boxes", "lastsound", "letters", "missing", "same", "riddle", "math", "geo"];
+const ACT_SCREENS = ["review", "sounds", "trace", "ispy", "blend", "build", "match", "tricky", "vocab", "rhyme", "clap", "boxes", "lastsound", "letters", "missing", "same", "riddle", "math", "geo"];
 function startRound(name, arg) {
   if (!ACT_SCREENS.includes(name)) { round = null; return; }
-  const sub = PRACTICE[name] ? name : "reading", act = PRACTICE[name] ? arg : name, g = St.S.grade[sub];
+  const sub = name === "review" ? (St.SUBJECTS.includes(arg) ? arg : St.S.subject) : PRACTICE[name] ? name : "reading";
+  const act = PRACTICE[name] ? arg : name, g = St.S.grade[sub];
   round = { sub, act, g, total: 0, n: 0, right: 0, seen: new Set(), base: ["prek", "k"].includes(g) ? 6 : 10 };
 }
 const roundSize = (pool = Infinity) => { if (round && !round.total) round.total = Math.max(1, Math.min(round.base, pool)); };
@@ -151,7 +156,7 @@ function advance(ok, cont) {
   if (!round) return cont();
   round.n++; if (ok) round.right++;
   if (round.n >= round.total) return results();
-  cont();
+  (round.review || cont)();   // in a Mixed Review round the next question comes from another activity
 }
 const starsFor = (right, total) => { const p = right / total; return p >= .9 ? 3 : p >= .7 ? 2 : p >= .5 ? 1 : 0; };
 const starRow = n => `<span class="stars" aria-label="${n} of 3 stars">${[1, 2, 3].map(i => i <= n ? "★" : "☆").join("")}</span>`;
@@ -159,9 +164,9 @@ async function results() {
   const r = round, stars = starsFor(r.right, r.total), key = `${r.sub}:${r.g}:${r.act}`, prev = St.best(key);
   St.setBest(key, stars);
   const better = stars > prev, bonus = better ? (stars - prev) * 2 : 0;   // bonus only for beating your best, so replays can't farm stars
-  const list = lessons(r.sub, r.g), name = (list.find(([id]) => id === r.act) || [])[2] || "Round";
-  const nextAct = [...list.slice(list.findIndex(([id]) => id === r.act) + 1), ...list].find(([id]) => id !== r.act && St.lessonOpen(r.sub, r.g, id) && St.best(`${r.sub}:${r.g}:${id}`) < 2)
-    || list[list.findIndex(([id]) => id === r.act) + 1];
+  const list = lessons(r.sub, r.g), name = r.act === "review" ? "Mixed Review" : (list.find(([id]) => id === r.act) || [])[2] || "Round";
+  const after = [...list.slice(list.findIndex(([id]) => id === r.act) + 1), ...list].filter(([id]) => id !== r.act && St.lessonOpen(r.sub, r.g, id));
+  const nextAct = after.find(([id]) => St.best(`${r.sub}:${r.g}:${id}`) < 2) || after[0];
   const day = St.today(); (day.rounds || (day.rounds = [])).push({ sub: r.sub, g: r.g, act: r.act, name, stars }); St.save();
   const replay = { ...r }; round = null;
   shell("Round done!", `<section class="card results">
@@ -174,7 +179,8 @@ async function results() {
     <div class="row"><button class="btn yes big" id="again">↻ Play again</button>${nextAct ? `<button class="btn big" id="nextact">Next: ${esc(nextAct[2])} →</button>` : ""}</div>
     <div class="row"><button class="btn" id="home">🏠 Home</button></div></section>`);
   if (stars === 3) confetti(120);
-  const open = (sub, act) => { const hash = sub === "reading" ? act : sub + "-" + act; if (location.hash.slice(1) === hash) route(); else go(...(sub === "reading" ? [act] : [sub, act])); };
+  const open = (sub, act) => { const to = act === "review" ? ["review", sub] : sub === "reading" ? [act] : [sub, act];
+    if (location.hash.slice(1) === to.join("-")) route(); else go(...to); };
   $("#again").onclick = () => open(replay.sub, replay.act);
   if (nextAct) $("#nextact").onclick = () => open(replay.sub, nextAct[0]);
   $("#home").onclick = () => go("home");
@@ -187,6 +193,17 @@ const partsHTML = (parts, extra = "") => parts.map((p, i) => `<button class="til
 function playParts(parts, tiles, gap = 420) {
   const idx = parts.map((p, i) => p.clip ? i : -1).filter(i => i >= 0);
   return A.play(idx.map(i => parts[i].clip), gap, j => tiles.forEach((t, k) => lit(t, k === idx[j])));
+}
+
+// Answer buttons: a wrong tap is marked and explained; the right tap locks the question, so a second tap
+// (or a tap on another button while the praise plays) can't count twice or skip the next question.
+function choices(root, sel, isRight, onRight, onWrong) {
+  let done = false, miss = 0;
+  root.querySelectorAll(sel).forEach(b => b.onclick = async () => {
+    if (done || b.classList.contains("bad")) return;
+    if (isRight(b)) { done = true; b.classList.add("good"); await onRight(miss); }
+    else { miss++; b.classList.add("bad"); await onWrong(b, miss); }
+  });
 }
 
 // ---------- router ----------
@@ -241,6 +258,7 @@ SCREENS.home = () => {
       return `<button class="planet ${locked ? "locked" : ""}" data-l="${g.id}" aria-pressed="${g.id === cur.id}" aria-label="${g.label}, ${g.planet}${locked ? ", locked" : ""}">
         <span class="orb" style="background:${g.orb}"></span><b>${locked ? "🔒 " : ""}${g.label}</b><small>${g.planet}</small></button>`;
     }).join("")}</div>
+    ${reviewable(sub, cur.id).length >= 2 ? `<button class="review" id="review"><span class="ico">🔀</span><span><b>Mixed Review</b><small>A bit of everything you've played, mixed up</small></span></button>` : ""}
     <div class="acts">${homeActs(rec && rec[0])}</div>
     ${nextPlanetBar(sub)}
     <button class="grownup" id="prog">👪 Grown-ups</button>`, { home: true });
@@ -253,8 +271,29 @@ SCREENS.home = () => {
   app.querySelectorAll(".act").forEach(b => b.onclick = () => b.classList.contains("locked")
     ? toast("This one is locked. A grown-up can unlock it.", 3000) : openAct(sub, b.dataset.id));
   $("#prog").onclick = () => go("progress");
+  const rv = $("#review"); if (rv) rv.onclick = () => go("review", sub);
   $("#kids").onclick = () => go("kids");
   $("#help").onclick = () => go("howto");
+};
+
+// ---------- MIXED REVIEW ----------
+// Practice that comes back after a while (spacing) and mixes kinds of questions (interleaving) is remembered far
+// better than the same kind of question over and over, though it feels harder (Rohrer et al.; Murray et al. 2025).
+// A review round takes one question at a time from activities already played on this planet, a different one each
+// time, favouring the ones with the fewest stars. It doesn't count toward opening planets.
+const NO_REVIEW = new Set(["stories", "trace", "tracenum"]);
+const reviewable = (sub, g) => lessons(sub, g).filter(([id]) => !NO_REVIEW.has(id) && St.lessonOpen(sub, g, id) && St.best(`${sub}:${g}:${id}`) >= 1).map(([id]) => id);
+SCREENS.review = arg => {
+  const sub = St.SUBJECTS.includes(arg) ? arg : St.S.subject, g = St.S.grade[sub], ids = reviewable(sub, g);
+  if (ids.length < 2 || !round) return go("home");
+  round.total = round.base;
+  round.review = () => {
+    const pool = ids.filter(id => id !== round.last), w = pool.map(id => 4 - St.best(`${sub}:${g}:${id}`));
+    let r = Math.random() * w.reduce((a, b) => a + b, 0), i = 0; while (i < pool.length - 1 && (r -= w[i]) > 0) i++;
+    round.last = pool[i];
+    if (PRACTICE[sub]) practice(sub, pool[i]); else { St.setSubject("reading"); SCREENS[pool[i]](); }
+  };
+  round.review();
 };
 
 // How close the next locked planet is: progress is earned on the planet just before it.
@@ -346,6 +385,8 @@ async function thenMoveOn(introClips, ms, next) {
   await wait(ok ? ms : ms + 1600);
   if (nav === navId) next();
 }
+// a wrong picture or word: say what it is, so the child hears the difference
+const thatsNot = b => A.play(["p_thats", W(b.dataset.w), "p_notquite"], 150);
 // ---------- SOUND CARDS: Montessori three-period lesson ----------
 // 1 "This is /s/" (naming), 2 "Show me /s/" (recognition), 3 "What sound is this?" (recall)
 SCREENS.sounds = () => {
@@ -381,17 +422,10 @@ function soundP2(s, k, pool, fromP1) {
     <div class="choices">${opts.map(o => `<button class="choice letter" data-s="${o}" style="color:var(${isVowel(o) ? "--vowel" : "--cons"})">${D.SOUNDS[o][0]}</button>`).join("")}</div>`;
   const ask = () => A.play(["p_showme", SN(s)], 150);
   $("#again").onclick = ask; ask();
-  let miss = 0;
-  card.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-    if (b.classList.contains("bad")) return;
-    if (b.dataset.s === s) {
-      b.classList.add("good"); St.grade(k, miss === 0, "sounds");
-      await award(miss ? 1 : 2, [SN(s), cheer()]);
-      if (fromP1) soundP3(s, k, pool); else advance(miss === 0, SCREENS.sounds);
-    } else {
-      miss++; b.classList.add("bad"); await A.play([SN(b.dataset.s), "p_notquite"], 200); ask();
-    }
-  });
+  choices(card, ".choice", b => b.dataset.s === s, async miss => {
+    St.grade(k, !miss, "sounds"); await award(miss ? 1 : 2, [SN(s), cheer(miss)]);
+    if (fromP1) soundP3(s, k, pool); else advance(!miss, SCREENS.sounds);
+  }, async b => { await A.play([SN(b.dataset.s), "p_notquite"], 200); ask(); });
 }
 // Step 3, recall: which picture starts with this sound? (the child checks themselves; no grown-up needed)
 function soundP3(s, k, pool) {
@@ -407,12 +441,8 @@ function soundP3(s, k, pool) {
   A.preload(opts.map(W));
   A.play(["p_startswith"]);
   const t = $("#t"); t.onclick = async () => { lit(t, true); await A.play(SN(s)); lit(t, false); };
-  let miss = 0;
-  card.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-    if (b.classList.contains("bad")) return;
-    if (b.dataset.w === target) { b.classList.add("good"); St.grade(k, !miss, "sounds"); await award(miss ? 1 : 2, [W(target), SN(s), cheer()]); advance(!miss, SCREENS.sounds); }
-    else { miss++; b.classList.add("bad"); await A.play(["p_thats", W(b.dataset.w), "p_notquite"], 150); }
-  });
+  choices(card, ".choice", b => b.dataset.w === target,
+    async miss => { St.grade(k, !miss, "sounds"); await award(miss ? 1 : 2, [W(target), SN(s), cheer(miss)]); advance(!miss, SCREENS.sounds); }, thatsNot);
 }
 
 // ---------- TRACE IT: sandpaper letters (and sandpaper numerals in math) ----------
@@ -504,17 +534,9 @@ SCREENS.ispy = () => {
   const ask = () => A.play(["p_ispy", SN(s), SN(s)], 250);
   ask(); $("#again").onclick = ask; $("#snd").onclick = () => A.play(SN(s));
   $("#skip").onclick = () => advance(false, SCREENS.ispy);
-  let miss = 0;
-  app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-    const w = b.dataset.w;
-    if (w === target) {
-      b.classList.add("good"); St.grade(k, miss === 0, "ispy");
-      await award(miss ? 1 : 2, [W(w), SN(s), cheer()]); advance(miss === 0, SCREENS.ispy);
-    } else {
-      miss++; b.classList.add("bad");
-      await A.play(["p_thats", W(w), "p_notquite"], 150); ask();
-    }
-  });
+  choices(app, ".choice", b => b.dataset.w === target,
+    async miss => { St.grade(k, !miss, "ispy"); await award(miss ? 1 : 2, [W(target), SN(s), cheer(miss)]); advance(!miss, SCREENS.ispy); },
+    async b => { await thatsNot(b); ask(); });
 };
 
 // ---------- BLEND IT: sound out with a grown-up (Chunk It from 3rd grade) ----------
@@ -542,7 +564,7 @@ SCREENS.blend = (group) => {
   A.preload([...parts.map(p => p.clip).filter(Boolean), W(w), ...(chunks ? [] : ["st_" + w])]);
   const tiles = [...app.querySelectorAll("#tiles .tile")], clear = () => tiles.forEach(t => lit(t, false));
   tiles.forEach(t => t.onclick = async () => { const i = +t.dataset.i; clear(); lit(t, true); await A.play(parts[i].clip || "p_silent"); lit(t, false); });
-  let helped = false, miss = 0;
+  let helped = false;
   $("#slow").onclick = async () => {
     helped = true;
     const ok = await playParts(parts, tiles, chunks ? 300 : 420);
@@ -550,16 +572,12 @@ SCREENS.blend = (group) => {
     if (!chunks) await A.play("st_" + w); else await A.play(W(w));
     clear();
   };
-  const done = async () => { St.grade(k, !helped && !miss, "blend"); await award(!helped && !miss ? 2 : 1, [cheer(), W(w)]); await wait(250); advance(!helped && !miss, () => SCREENS.blend(group)); };
+  const done = async miss => { const ok = !helped && !miss; St.grade(k, ok, "blend"); await award(ok ? 2 : 1, [cheer(miss), W(w)]); await wait(250); advance(ok, () => SCREENS.blend(group)); };
   if (chunks) {
-    let checked = false;
-    $("#check").onclick = async () => { checked = true; tiles.forEach(t => lit(t, true)); await A.play(W(w)); clear(); };
-    $("#rd").onclick = () => { if (checked) helped = helped || false; done(); };
-  } else app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-    if (b.classList.contains("bad")) return;
-    if (b.dataset.w === w) { b.classList.add("good"); done(); }
-    else { miss++; b.classList.add("bad"); await A.play(["p_thats", W(b.dataset.w), "p_notquite"], 150); }
-  });
+    // big words are checked by ear: hear it, then say whether you read it right
+    $("#check").onclick = async () => { tiles.forEach(t => lit(t, true)); await A.play(W(w)); clear(); };
+    $("#rd").onclick = e => { e.currentTarget.disabled = true; done(0); };
+  } else choices(app, ".choice", b => b.dataset.w === w, done, thatsNot);
 };
 
 // ---------- BUILD A WORD: movable alphabet (syllable tiles from 3rd grade) ----------
@@ -584,8 +602,9 @@ SCREENS.build = () => {
   $("#skip").onclick = () => advance(false, SCREENS.build);
   let pos = 0, miss = 0;
   const boxes = [...app.querySelectorAll(".box")];
-  $("#hint").onclick = () => { miss++; A.play(parts[pos].clip || "p_silent"); };
+  $("#hint").onclick = () => { if (pos >= parts.length) return; miss++; A.play(parts[pos].clip || "p_silent"); };
   app.querySelectorAll("#tray .tile").forEach(b => b.onclick = async () => {
+    if (pos >= parts.length || b.classList.contains("used")) return;   // the word is built (the praise is playing)
     const t = tray[+b.dataset.i];
     if (t.d === parts[pos].d) {
       boxes[pos].textContent = t.d; boxes[pos].classList.add("filled", partClass(parts[pos])); b.classList.add("used");
@@ -596,7 +615,7 @@ SCREENS.build = () => {
         const idx = parts.map((p, i) => p.clip ? i : -1).filter(i => i >= 0);
         await A.play(idx.map(i => parts[i].clip), 250, j => boxes.forEach((x, i) => x.style.transform = i === idx[j] ? "translateY(-6px)" : ""));
         boxes.forEach(x => x.style.transform = "");
-        await award(miss <= 1 ? 3 : 2, [W(w), cheer()]); await wait(300); advance(miss <= 1, SCREENS.build);
+        await award(miss <= 1 ? 3 : 2, [W(w), cheer(miss)]); await wait(300); advance(miss <= 1, SCREENS.build);
       } else if (t.clip) A.play(t.clip);
     } else {
       miss++; b.classList.remove("wiggle"); void b.offsetWidth; b.classList.add("wiggle");
@@ -623,15 +642,13 @@ SCREENS.match = () => {
     <div class="row"><button class="btn" id="help">👣 Help me sound it out</button><button class="btn" id="skip">Skip</button></div></section>`);
   const tiles = [...app.querySelectorAll("#tiles .tile")];
   tiles.forEach(t => t.onclick = async () => { lit(t, true); await A.play(parts[+t.dataset.i].clip || "p_silent"); lit(t, false); });
-  let helped = false, miss = 0;
+  let helped = false;
   $("#help").onclick = async () => { helped = true; await playParts(parts, tiles); tiles.forEach(t => lit(t, false)); };
   $("#skip").onclick = () => advance(false, SCREENS.match);
-  app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-    if (b.dataset.w === w) {
-      b.classList.add("good"); St.grade(k, !helped && !miss, "match"); St.grade("word:" + w, !helped && !miss);
-      await award(!helped && !miss ? 2 : 1, [W(w), cheer()]); advance(!helped && !miss, SCREENS.match);
-    } else { miss++; b.classList.add("bad"); await A.play(["p_thats", W(b.dataset.w), "p_notquite"], 150); }
-  });
+  choices(app, ".choice", b => b.dataset.w === w, async miss => {
+    const ok = !helped && !miss; St.grade(k, ok, "match"); St.grade("word:" + w, ok);
+    await award(ok ? 2 : 1, [W(w), cheer(miss)]); advance(ok, SCREENS.match);
+  }, thatsNot);
 };
 
 // ---------- TRICKY WORDS ----------
@@ -652,12 +669,9 @@ SCREENS.tricky = () => {
       <div class="defs">${opts.map(x => `<button class="choice text wordpick" data-w="${esc(x)}">${esc(x)}</button>`).join("")}</div>`;
     const ask = () => A.play(["p_findword", W(w)], 200);
     $("#again").onclick = ask; ask();
-    let miss = 0;
-    card.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-      if (b.classList.contains("bad")) return;
-      if (b.dataset.w === w) { b.classList.add("good"); St.grade(k, !miss, "tricky"); await award(miss ? 1 : 2, [W(w), cheer()]); advance(!miss, SCREENS.tricky); }
-      else { miss++; b.classList.add("bad"); await A.play(["p_thats", W(b.dataset.w), "p_notquite"], 150); ask(); }
-    });
+    choices(card, ".choice", b => b.dataset.w === w,
+      async miss => { St.grade(k, !miss, "tricky"); await award(miss ? 1 : 2, [W(w), cheer(miss)]); advance(!miss, SCREENS.tricky); },
+      async b => { await thatsNot(b); ask(); });
   };
   if (!learn) return find();
   card.innerHTML = `<p class="prompt big">New heart word!</p>
@@ -685,16 +699,16 @@ SCREENS.vocab = () => {
   A.play(["p_meaning"]);
   $("#skip").onclick = () => advance(false, SCREENS.vocab);
   app.querySelectorAll(".say").forEach(b => b.onclick = () => A.play("d_" + D.slug(b.dataset.say)));
-  let miss = 0;
-  app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-    if (b.dataset.w === w) {
-      b.classList.add("good"); St.grade(k, !miss, "vocab");
-      await award(miss ? 1 : 2, [W(w), "d_" + D.slug(w), cheer()]); advance(!miss, SCREENS.vocab);
-    } else { miss++; b.classList.add("bad"); await A.play("p_notquite"); }
-  });
+  choices(app, ".choice", b => b.dataset.w === w,
+    async miss => { St.grade(k, !miss, "vocab"); await award(miss ? 1 : 2, [W(w), "d_" + D.slug(w), cheer(miss)]); advance(!miss, SCREENS.vocab); },
+    () => A.play("p_notquite"));
 };
 
 // ---------- STORYBOOK ----------
+// questions for a grown-up to ask after a story (dialogic reading: recall, open-ended, "what if", and linking to the child's life)
+const TALK = ["What was your favorite part? Why?", "What happened first? And then what?", "How do you think the main character felt? How can you tell?",
+  "What do you think happens after the story ends?", "Has something like this ever happened to you?", "What would you have done?",
+  "Can you find a word in the story that starts with the same sound as your name?", "If you could change the ending, what would happen instead?"];
 const answerClip = (st, i) => /^[a-z]+$/i.test(st.q[1][i][0]) ? W(st.q[1][i][0]) : `ans_${st.id}_${i}`;
 SCREENS.stories = () => {
   const S = St.S, mine = S.grade.reading;
@@ -757,20 +771,30 @@ SCREENS.story = (id) => {
         : `<button class="choice" data-i="${i}" aria-label="${esc(w)}">${p}</button>`).join("")}</div>
       <div class="row"><button class="btn" id="hear">🔊 Hear the question</button></div></section>`);
     A.play("q_" + st.id); $("#hear").onclick = () => A.play("q_" + st.id);
-    app.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-      const i = +b.dataset.i;
-      if (i === 0) {
-        b.classList.add("good");
-        // words they needed help with come back sooner in practice
-        const lw = levelWords(D.READING[st.level]);
-        helpWords.forEach(w => { if (lw.some(([x]) => x === w)) St.grade("word:" + w, false); });
-        St.storyRead(st.id); St.today().acts.stories = (St.today().acts.stories || 0) + 1;
-        const mine = D.STORIES.filter(x => x.level === st.level), read = mine.filter(x => St.S.stories[x.id]).length;
-        St.setBest(`reading:${st.level}:stories`, read >= mine.length ? 3 : Math.min(2, read));
-        confetti(120); await award(5, [answerClip(st, 0), "p_finished"]);
-        go("stories");
-      } else { b.classList.add("bad"); await A.play(["p_thats", answerClip(st, i), "p_notquite"], 150); }
-    });
+    choices(app, ".choice", b => b.dataset.i === "0", async miss => {
+      // words they needed help with come back sooner in practice
+      const lw = levelWords(D.READING[st.level]);
+      helpWords.forEach(w => { if (lw.some(([x]) => x === w)) St.grade("word:" + w, false); });
+      St.storyRead(st.id); St.today().acts.stories = (St.today().acts.stories || 0) + 1;
+      const mine = D.STORIES.filter(x => x.level === st.level), read = mine.filter(x => St.S.stories[x.id]).length;
+      St.setBest(`reading:${st.level}:stories`, read >= mine.length ? 3 : Math.min(2, read));
+      confetti(120); await award(5, [answerClip(st, 0), "p_finished"]);
+      finished();
+    }, b => A.play(["p_thats", answerClip(st, +b.dataset.i), "p_notquite"], 150));
+  };
+  // The end of a book. Reading the same story again is how reading gets smooth (repeated reading builds fluency),
+  // and a grown-up chatting about it with the child (dialogic reading) is where much of the learning happens.
+  const finished = () => {
+    const times = (St.S.stories[st.id] || {}).times || 1, talk = TALK[(times + st.id.length) % TALK.length];
+    shell(esc(st.title), `<section class="card results">
+      <div class="illus" aria-hidden="true">${st.cover}</div>
+      <p class="prompt big">You read the whole story!</p>
+      <p class="score reads" aria-label="read ${times} ${times === 1 ? "time" : "times"}">${[1, 2, 3].map(i => `<span class="${i <= times ? "on" : ""}">📖</span>`).join("")} read ${times} ${times === 1 ? "time" : "times"}</p>
+      <p class="prompt">${times < 3 ? "Read it again! Each time, the words get easier and it sounds smoother." : "You know this story well. Try a new one!"}</p>
+      <div class="row"><button class="btn ${times < 3 ? "yes" : ""} big" id="again">🔁 Read it again</button><button class="btn ${times < 3 ? "" : "yes"} big" id="more">📚 More stories</button></div>
+      <div class="panel talk"><b>👪 Talk about it together</b><p>${talk}</p></div></section>`);
+    $("#again").onclick = () => { page = 0; helpWords = new Set(); draw(); };
+    $("#more").onclick = () => go("stories");
   };
   draw();
 };
@@ -805,7 +829,7 @@ function practice(sub, id, P = PRACTICE[sub]) {
     busy = true; const first = miss === 0;
     if (p.reveal) { const r = document.createElement("div"); r.className = "revealbox"; r.innerHTML = p.reveal; app.querySelector(".card").appendChild(r); }
     St.grade(key, first, sub);
-    await award(first ? 2 : 1, [...(p.after || []), cheer()].filter(Boolean)); await wait(250); advance(first, again);
+    await award(first ? 2 : 1, [...(p.after || []), cheer(miss)].filter(Boolean)); await wait(250); advance(first, again);
   };
   // after two misses, show the answer and move on: no stars lost, and it comes back sooner
   const reveal = async () => {
@@ -872,12 +896,9 @@ function numberCards(g) {
       <div class="choices">${opts.map(o => `<button class="choice letter" data-n="${o}">${o}</button>`).join("")}</div>`;
     const ask = () => A.play(["p_showme", "n_" + n], 150);
     $("#again").onclick = ask; ask();
-    let miss = 0;
-    card.querySelectorAll(".choice").forEach(b => b.onclick = async () => {
-      if (b.classList.contains("bad")) return;
-      if (+b.dataset.n === n) { b.classList.add("good"); St.grade(k, !miss, "math"); await award(miss ? 1 : 2, ["n_" + n, cheer()]); fromP1 ? p3() : advance(!miss, next); }
-      else { miss++; b.classList.add("bad"); await A.play(["n_" + b.dataset.n, "p_notquite"], 200); ask(); }
-    });
+    choices(card, ".choice", b => +b.dataset.n === n,
+      async miss => { St.grade(k, !miss, "math"); await award(miss ? 1 : 2, ["n_" + n, cheer(miss)]); fromP1 ? p3() : advance(!miss, next); },
+      async b => { await A.play(["n_" + b.dataset.n, "p_notquite"], 200); ask(); });
   }
   // recall: the numeral alone; find the group with that many (the child checks themselves)
   function p3() {
@@ -886,12 +907,9 @@ function numberCards(g) {
     card.innerHTML = `${dotsHTML(3)}<p class="prompt big">Which group has this many?</p><button class="tile num" id="t">${n}</button>
       <div class="mchoices">${opts.map(o => `<button class="mchoice" data-n="${o}">${o ? M.objs(o, e) : "<span class='emo'>∅</span>"}</button>`).join("")}</div>`;
     A.play("m_whichmany"); $("#t").onclick = say;
-    let miss = 0;
-    card.querySelectorAll(".mchoice").forEach(b => b.onclick = async () => {
-      if (b.classList.contains("bad")) return;
-      if (+b.dataset.n === n) { b.classList.add("good"); St.grade(k, !miss, "math"); await award(miss ? 1 : 2, ["n_" + n, cheer()]); advance(!miss, next); }
-      else { miss++; b.classList.add("bad"); await A.play(["n_" + b.dataset.n, "p_notquite"], 200); }
-    });
+    choices(card, ".mchoice", b => +b.dataset.n === n,
+      async miss => { St.grade(k, !miss, "math"); await award(miss ? 1 : 2, ["n_" + n, cheer(miss)]); advance(!miss, next); },
+      b => A.play(["n_" + b.dataset.n, "p_notquite"], 200));
   }
 }
 // Sandpaper numerals
@@ -1002,6 +1020,9 @@ SCREENS.progress = (tab) => {
         <li><b>The rocket</b> at the top fills with today's stars. ${St.GOAL} stars completes the daily mission and launches it; every ${St.GOAL} after that is a bonus launch.</li>
         <li><b>Listening first:</b> before reading, children learn to hear sounds in words. Rhyme Time, Clap It (syllables), Sound Boxes (how many sounds, after Elkonin) and Last Sound train this, and they come before and alongside phonics.</li>
         <li><b>Heart words:</b> tricky words are sounded out as far as they go; only the odd letters (shown red with a ❤) are learned by heart.</li>
+        <li><b>🔀 Mixed Review:</b> once a child has played two activities on a planet, a Mixed Review card appears. It mixes questions from what they've already played. Mixed, spaced-out practice feels harder but is remembered much longer than doing one kind of question over and over.</li>
+        <li><b>Praise:</b> the game praises what your child did ("Careful looking!", "You kept trying, and you got it!"), not how clever they are. Children praised for effort and strategy take on harder work and handle mistakes better. It works at home too.</li>
+        <li><b>Stories twice or three times:</b> rereading the same story is how reading becomes smooth. After each story there's a question to talk about together: chatting about a book is where much of the learning happens.</li>
         <li><b>Picture games:</b> Letter Match, Missing Letters, Same Word, Riddles, Odd One Out, Measure It and Picture Graph can be played with the sound off. The question is still read out, but the answer is all in the pictures.</li>
         <li><b>Stories:</b> every planet has its own shelf. Pre-K books read themselves aloud; from K up, children read and tap only the words they need.</li>
         <li><b>Math sense:</b> Quick Look trains seeing small amounts at a glance (subitizing), Number Bonds shows how numbers split into parts, and the Number Line builds a sense of size.</li>

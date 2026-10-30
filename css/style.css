@@ -156,6 +156,10 @@ details.panel[open] summary{margin-bottom:6px}
 .mbar.big{max-width:380px}
 .mchoices.stack{grid-template-columns:1fr}
 .mchoices.stack .mchoice{padding:10px 14px;min-height:64px}
+.review{display:flex;align-items:center;gap:12px;width:100%;margin:0 0 12px;padding:12px 16px;border:3px dashed #7AAEFF;border-radius:20px;background:#22305f;color:#fff;text-align:left;cursor:pointer;font:inherit}
+.review .ico{font-size:2rem} .review b{display:block;font-family:var(--display);font-size:1.15rem} .review small{color:#C5D1F5}
+.reads span{opacity:.25;filter:grayscale(1);margin:0 2px} .reads span.on{opacity:1;filter:none}
+.talk{margin-top:14px;text-align:left;background:var(--card2);color:var(--ink)} .talk p{margin:6px 0 0}
 .shelfhead{font-family:var(--display);margin:18px 4px 8px;color:#C5D1F5}
 
 @media (max-width:420px){.subjects button{font-size:1rem;padding:8px 4px}}

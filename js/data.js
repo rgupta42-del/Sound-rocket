@@ -328,7 +328,9 @@ window.DATA = (() => {
     // added with the grade levels and math
     mission2:"Mission complete! Great work today!", blast2:"Blast off! Great work!", chunks:"Good chunks! Now read the whole word.",
     meaning:"What does this word mean?", silent:"This e is silent. It makes the vowel say its name.", answeris:"The answer is",
-    smart:"Smart thinking!", correct:"That's right!",
+    correct:"That's right!",
+    // praise for what the child did (effort, strategy, care), not for being clever
+    careful:"Careful looking!", worked:"You worked it out!", kepttrying:"You kept trying, and you got it!", figured:"You figured it out!",
     startswith:"Which picture starts with this sound?", findword:"Find the word", round:"Round complete! Great job!", streak:"You're on a streak! Keep it up!", bonus:"Bonus blast off!", checked:"Checked off! Great work!", round3:"Three stars! Amazing!", roundbest:"Round complete! New best score!", roundtry:"Round complete! Play again to earn more stars."
   };
 

@@ -15,6 +15,7 @@ window.Store = (() => {
   const blank = () => ({ stars: 0, launches: 0, items: {}, days: {}, stories: {}, recent: [], lastAct: 0, goalDays: {}, migrated: true, ...fresh() });
   const read = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   // bring older saved progress up to date
   function upgrade(s) {
     s = { ...blank(), migrated: false, ...s };
@@ -33,6 +34,9 @@ window.Store = (() => {
     // carry over stars from the first version of the game
     const old = read("soundRocket"); if (old && !s.migrated) { s.stars += old.pts || 0; s.launches += old.launches || 0; }
     s.migrated = true;
+    // days older than about 3 months keep only their totals (stars, minutes), so saved progress doesn't grow forever
+    const cutoff = dayKey(new Date(Date.now() - 100 * 864e5));
+    for (const [k, d] of Object.entries(s.days || {})) if (k < cutoff && (d.rounds || d.acts || d.stories)) s.days[k] = { stars: d.stars || 0, secs: d.secs || 0, right: d.right || 0, tries: d.tries || 0 };
     return s;
   }
 
@@ -44,7 +48,9 @@ window.Store = (() => {
   let timer = null;
   const flush = () => { clearTimeout(timer); timer = null; if (P.cur) write(kidKey(P.cur), S); };
   const save = () => { clearTimeout(timer); timer = setTimeout(flush, 150); };
+  // save right away when the app goes to the background too (phones often close background tabs without "pagehide")
   addEventListener("pagehide", () => { if (timer) flush(); });
+  document.addEventListener("visibilitychange", () => { if (document.hidden && timer) flush(); });
 
   const kids = () => P.kids;
   const kid = () => P.kids.find(k => k.id === P.cur) || null;
@@ -72,11 +78,10 @@ window.Store = (() => {
     write(kidKey(id), upgrade(d.progress)); switchKid(id); return id;
   }
 
-  const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   function today() {
     const k = dayKey();
     if (!S.days[k]) S.days[k] = { stars: 0, secs: 0, right: 0, tries: 0, acts: {}, stories: [] };
-    if (!S.days[k].sub) S.days[k].sub = { reading: 0, math: 0 };
+    if (!S.days[k].sub) S.days[k].sub = { reading: 0, math: 0, geo: 0 };
     return S.days[k];
   }
   // Count active minutes: time between taps, ignoring gaps over 90 seconds
