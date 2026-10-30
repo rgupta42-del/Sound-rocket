@@ -6,7 +6,7 @@
 //    so old and new recordings never mix.
 // Range requests (iPhone/iPad <audio> asks for parts of a file) go straight to the network:
 // a cached whole file can't answer them, and partial responses can't be cached.
-const VERSION = "sound-rocket-v19", AUDIO = "sound-rocket-audio-5";
+const VERSION = "sound-rocket-v20", AUDIO = "sound-rocket-audio-5";
 self.addEventListener("install", e => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil((async () => {
   for (const k of await caches.keys()) if (k !== VERSION && k !== AUDIO) await caches.delete(k);

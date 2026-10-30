@@ -489,14 +489,19 @@ function traceScreen(o) {
   function at(e) { const r = rect || cv.getBoundingClientRect(); return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; }
   function stroke(p) {
     g.strokeStyle = ink; g.lineWidth = 16 * dpr; g.lineCap = "round"; g.lineJoin = "round";
-    g.beginPath(); g.moveTo(...(last || p)); g.lineTo(...p); g.stroke(); last = p;
-    // count letter cells covered
+    const from = last || p;
+    g.beginPath(); g.moveTo(...from); g.lineTo(...p); g.stroke(); last = p;
+    // count the letter cells covered all along the stroke (a quick swipe sends only a few points)
     if (!maskData) readMask();
-    const x = p[0] | 0, y = p[1] | 0;
-    if (x >= 0 && y >= 0 && x < mask.width && y < mask.height && maskData[(y * mask.width + x) * 4 + 3] > 0) hits.add(((x / grid) | 0) + "," + ((y / grid) | 0));
+    const steps = Math.max(1, Math.ceil(Math.hypot(p[0] - from[0], p[1] - from[1]) / (grid / 2)));
+    for (let i = 0; i <= steps; i++) {
+      const x = (from[0] + (p[0] - from[0]) * i / steps) | 0, y = (from[1] + (p[1] - from[1]) * i / steps) | 0;
+      if (x >= 0 && y >= 0 && x < mask.width && y < mask.height && maskData[(y * mask.width + x) * 4 + 3] > 0) hits.add(((x / grid) | 0) + "," + ((y / grid) | 0));
+    }
   }
   cv.onpointerdown = e => { down = true; last = null; rect = cv.getBoundingClientRect(); cv.setPointerCapture(e.pointerId); stroke(at(e)); if (!hits.size) A.play(o.clip); };
-  cv.onpointermove = e => { if (down) stroke(at(e)); };
+  // a stroke that starts just outside the box (or on its rounded corner) still counts once it moves onto the letter
+  cv.onpointermove = e => { if (!down && e.buttons & 1) { down = true; last = null; rect = cv.getBoundingClientRect(); } if (down) stroke(at(e)); };
   cv.onpointerup = cv.onpointercancel = async () => {
     down = false; last = null; rect = null;
     if (!maskData) readMask();
